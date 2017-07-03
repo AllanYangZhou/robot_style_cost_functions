@@ -2,42 +2,34 @@ import trajoptpy
 from trajoptpy.check_traj import traj_is_safe
 import interactpy
 import openravepy as orpy
-import prpy
 import numpy as np
-import pickle
 import json
-
-
-dofs = np.array([ -1.00000003e+00,  -3.12429069e+00,   1.56311539e+00,
-                  1.64363038e+00,   3.77923758e-07,  -3.09532846e+00,
-                  -1.64521968e-07,   .6,   .4,   .3])
-robot_T = np.array([[  8.41128138e-01,  -5.40835886e-01,  -6.44726267e-08,
-          1.22802639e+00],
-       [  5.40835886e-01,   8.41128138e-01,  -1.89389699e-08,
-         -4.89164531e-01],
-       [  6.44726150e-08,  -1.89390097e-08,   1.00000000e+00,
-          5.47507167e-01],
-       [  0.00000000e+00,   0.00000000e+00,   0.00000000e+00,
-          1.00000000e+00]])
-camera_T = np.array([[-0.99957573,  0.0139481 ,  0.02556982,  1.23822057],
-                     [-0.01719667,  0.42592924, -0.90459304,  1.93561268],
-                     [-0.02350829, -0.90464896, -0.42550867,  1.7823844 ],
-                     [ 0.        ,  0.        ,  0.        ,  1.        ]])
-goal_T = np.array([[ 0.01297332,  0.99651909,  0.08234919,  1.21825334],
-                   [-0.00482776,  0.08241758, -0.99658619,  0.21255009],
-                   [-0.99990419,  0.01253147,  0.00588019,  0.61503719],
-                   [ 0.        ,  0.        ,  0.        ,  1.        ]])
+import constants as c
 
 
 def setup():
-    env, robot = interactpy.initialize(saved_env='./default.env.xml')
+    env, robot = interactpy.initialize()
     robot.SetActiveDOFs(robot.arm.GetArmIndices())
-    robot.SetTransform(robot_T)
-    robot.SetDOFValues(dofs)
+    robot.SetActiveDOFValues(c.starting_angles)
+    robot.SetDOFValues(c.starting_finger_angles, [7,8,9])
+    table = env.GetKinBody('table')
+    mug = env.GetKinBody('mug')
+    env.Remove(table)
+    env.Remove(mug)
+    env.Load('{:s}/table.xml'.format(c.iact_ctrl_path))
+    env.Load('{:s}/cabinet.xml'.format(c.iact_ctrl_path))
+    table = env.GetKinBody('table')
+    cabinet = env.GetKinBody('cabinet')
+    cabinet.SetTransform(c.cabinet_T)
+    table.SetTransform(c.table_T)
+    cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.cabinet_color)
+    table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.table_color)
+    env.Load('/usr/local/share/openrave-0.9/data/box1.kinbody.xml')
     box = env.GetKinBody('box1')
+    box.SetTransform(c.box_T)
     robot.Grab(box)
     viewer = env.GetViewer()
-    viewer.SetCamera(camera_T)
+    viewer.SetCamera(c.camera_T)
     return env, robot
 
 
