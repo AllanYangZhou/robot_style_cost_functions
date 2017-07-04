@@ -44,9 +44,7 @@ starting_angles = np.array([
     264.061767578,
     241.058807373
 ])
-
 starting_angles = (np.pi / 180.) * starting_angles
-
 starting_angles[2] += np.pi # bug in recording process
 
 iact_ctrl_path = find_in_workspaces(
@@ -55,3 +53,15 @@ iact_ctrl_path = find_in_workspaces(
     first_match_only=True)[0]
 
 starting_finger_angles = [.4,.5,.5]
+
+goal_angles = np.array([
+    353.210235596,
+    241.983413696,
+    372.164093018,
+    123.811828613,
+    357.25100708,
+    235.245880127,
+    221.578979492
+])
+goal_angles = (np.pi / 180.) * goal_angles
+goal_angles[2] += np.pi

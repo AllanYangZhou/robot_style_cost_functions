@@ -129,3 +129,57 @@ def trajopt_plan_to_ee(env, robot, goal_T,
         if is_safe:
             return waypoints_to_traj(env, robot, waypoints)
     print('Failed to solve.')
+
+
+def trajopt_plan_to_config(env, robot, goal_config,
+                       num_steps=10, w=[1, 0, 0]):
+    def f_ee_height(x):
+        robot.SetActiveDOFValues(x)
+        return w[1] * (robot.arm.hand.GetTransform()[2,3] - robot.GetTransform()[2,3])
+    def f_ee_extent(x):
+        robot.SetActiveDOFValues(x)
+        return w[2] * np.linalg.norm(robot.arm.hand.GetTransform()[:2,3] - robot.GetTransform()[:2,3])
+    joint_target = goal_config.tolist()
+    request = {
+        'basic_info' : {
+            'n_steps' : num_steps,
+            'manip' : robot.arm.GetName(),
+            'start_fixed' : True
+        },
+        'costs' : [
+            {
+                'type' : 'joint_vel', # \sum_{t,j} (x_{t+1,j} - x_{t,j})^2
+                'params': {'coeffs' : [w[0]]}
+            },
+            {
+                'type' : 'collision',
+                'params' : {
+                    'coeffs' : [20],
+                    'dist_pen' : [0.025]
+                }
+            }
+        ],
+        'constraints' : [
+            {
+                'type' : 'joint',
+                'params' : {'vals': joint_target}
+            }
+        ],
+        'init_info' : {
+            'type' : 'straight_line',
+            'endpoint' : joint_target
+        }
+    }
+    s = json.dumps(request)
+    prob = trajoptpy.ConstructProblem(s, env)
+    for t in range(num_steps):
+        prob.AddCost(f_ee_height, [(t,j) for j in xrange(7)], 'up%i'%t)
+        prob.AddCost(f_ee_extent, [(t,j) for j in xrange(7)], 'up%i'%t)
+    result = trajoptpy.OptimizeProblem(prob)
+    waypoints = result.GetTraj()
+    is_safe = traj_is_safe(
+        waypoints, robot)
+    if is_safe:
+        return waypoints_to_traj(env, robot, waypoints)
+    else:
+        print('Failed to solve.')
