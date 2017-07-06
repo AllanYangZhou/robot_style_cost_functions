@@ -134,7 +134,6 @@ def trajopt_plan_to_ee(env, robot, goal_T,
 
 def trajopt_plan_to_config(env, robot, goal_config,
                            num_steps=10, w=[1, 0, 0],
-                           return_result=False,
                            waypoints=[]):
     def f_ee_height(x):
         robot.SetActiveDOFValues(x)
@@ -154,6 +153,7 @@ def trajopt_plan_to_config(env, robot, goal_config,
         inits.append(init)
     joint_target = goal_config.tolist()
     traj = None
+    best_cost = np.inf
     for init in inits:
         request = {
             'basic_info' : {
@@ -184,7 +184,7 @@ def trajopt_plan_to_config(env, robot, goal_config,
                 'type' : 'given_traj'
             }
         }
-        request['init_info']['data'] = [row.tolist() for row in init]
+        request['init_info']['data'] = init.tolist()
         s = json.dumps(request)
         prob = trajoptpy.ConstructProblem(s, env)
         for t in range(num_steps):
@@ -192,17 +192,16 @@ def trajopt_plan_to_config(env, robot, goal_config,
                 f_ee_height,
                 [(t,j) for j in xrange(7)],
                 'up%i'%t)
-            prob.AddCost(f_ee_extent, [(t,j) for j in xrange(7)], 'up%i'%t)
+            prob.AddCost(
+                f_ee_extent,
+                [(t,j) for j in xrange(7)],
+                'up%i'%t)
         result = trajoptpy.OptimizeProblem(prob)
         waypoints = result.GetTraj()
         is_safe = traj_is_safe(
             waypoints, robot)
-        if is_safe:
+        total_cost = np.sum(zip(*result.GetCosts())[1])
+        if is_safe and total_cost < best_cost:
             traj = waypoints_to_traj(env, robot, waypoints)
-    if traj:
-        if return_result:
-            return traj, result
-        else:
-            return traj
-    else:
-        print('Failed to solve.')
+            best_cost = total_cost
+    return traj
