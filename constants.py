@@ -65,3 +65,6 @@ goal_angles = np.array([
 ])
 goal_angles = (np.pi / 180.) * goal_angles
 goal_angles[2] += np.pi
+
+wp_high = np.array([ 6.16468156,  2.9901967 ,  9.63708143,  2.96758199,  6.23520633,
+        3.06439853,  3.86728277])
