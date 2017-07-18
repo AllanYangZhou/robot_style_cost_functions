@@ -2,6 +2,15 @@ import numpy as np
 from catkin.find_in_workspaces import find_in_workspaces
 
 
+def convert_angles(angles):
+    '''Convert angles recorded from physical robot
+    to openrave joint angles.
+    '''
+    converted = (np.pi / 180.) * angles
+    converted[2] += np.pi #bug in the recording process
+    return converted
+
+
 camera_T = np.array([[-0.94278671, -0.0492597 ,  0.32973732, -0.98667234],
                      [-0.32941772,  0.28997609, -0.89855319,  2.01822257],
                      [-0.05135347, -0.95576532, -0.28961262,  1.00309241],
@@ -35,7 +44,7 @@ cabinet_T = np.array([[  0.00000000e+00,  -1.00000000e+00,   0.00000000e+00,
 cabinet_color = np.array([0.05,0.6,0.3])
 
 # Angles recorded from physical robot (degrees)
-starting_angles = np.array([
+starting_angles = convert_angles(np.array([
     335.183105469,
     167.792098999,
     598.978515625,
@@ -43,9 +52,8 @@ starting_angles = np.array([
     263.228393555,
     264.061767578,
     241.058807373
-])
-starting_angles = (np.pi / 180.) * starting_angles
-starting_angles[2] += np.pi # bug in recording process
+]))
+
 
 iact_ctrl_path = find_in_workspaces(
     project='iact_control',
@@ -54,7 +62,7 @@ iact_ctrl_path = find_in_workspaces(
 
 starting_finger_angles = [.4,.5,.5]
 
-goal_angles = np.array([
+goal_angles = convert_angles(np.array([
     353.210235596,
     241.983413696,
     372.164093018,
@@ -62,9 +70,8 @@ goal_angles = np.array([
     357.25100708,
     235.245880127,
     221.578979492
-])
-goal_angles = (np.pi / 180.) * goal_angles
-goal_angles[2] += np.pi
+]))
+
 
 wp_high = np.array([ 6.16468156,  2.9901967 ,  9.63708143,  2.96758199,  6.23520633,
         3.06439853,  3.86728277])

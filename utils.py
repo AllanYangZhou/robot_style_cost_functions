@@ -2,7 +2,7 @@ import interactpy
 import openravepy as orpy
 import numpy as np
 import constants as c
-
+import trajoptpy.math_utils as mu
 
 def setup():
     env, robot = interactpy.initialize()
@@ -40,13 +40,21 @@ def get_ik_solns(robot, goal_T):
         return ik_solutions
 
 
-def waypoints_to_traj(env, robot, waypoints):
+def waypoints_to_traj(env, robot, waypoints, duration):
     traj = orpy.RaveCreateTrajectory(env, '')
-    traj.Init(robot.GetActiveConfigurationSpecification('linear'))
+    spec = robot.GetActiveConfigurationSpecification('linear')
+    indices = robot.GetActiveDOFIndices()
+    spec.AddDeltaTimeGroup()
+    traj.Init(spec)
+    dt = float(duration) / waypoints.shape[0]
     for i in range(waypoints.shape[0]):
-        traj.Insert(i, waypoints[i])
-    orpy.planningutils.RetimeActiveDOFTrajectory(
-        traj, robot)
+        wp = np.empty(spec.GetDOF())
+        if i:
+            spec.InsertDeltaTime(wp, dt)
+        else:
+            spec.InsertDeltaTime(wp, 0)
+        spec.InsertJointValues(wp, waypoints[i], robot, indices, 0)
+        traj.Insert(i, wp)
     return traj
 
 
@@ -63,3 +71,15 @@ def make_orientation_cost(robot):
         return np.array([np.cross(joint.GetAxis(), world_dir)[:3]
                          for joint in arm_joints]).T.copy()
     return f, dfdx
+
+
+def interpolate_waypoint(start, waypoint, end, num_steps):
+    waypoint_step = (num_steps - 1) // 2
+    traj = np.empty((num_steps, 7))
+    traj[:waypoint_step+1] = mu.linspace2d(start, waypoint, waypoint_step+1)
+    traj[waypoint_step:] = mu.linspace2d(waypoint, end, num_steps - waypoint_step)
+    return traj
+
+
+def check_trajs_equal(traj1, traj2):
+    return np.allclose(traj1.GetAllWaypoints2D(), traj2.GetAllWaypoints2D())

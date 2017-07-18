@@ -1,98 +1,76 @@
 import numpy as np
 import openravepy as orpy
 import json
-from utils import waypoints_to_traj
+from utils import (
+    waypoints_to_traj,
+    get_ik_solns,
+    interpolate_waypoint,
+    check_trajs_equal)
 import trajoptpy
 import trajoptpy.math_utils as mu
-from trajoptpy.check_traj import traj_is_safe, get_ik_solns
+from trajoptpy.check_traj import traj_is_safe
+import constants as c
 
 
-def trajopt_plan_to_ee(env, robot, goal_T,
-                       num_steps=10, num_inits=20,
-                       w=[1, 0, 0]):
-    def f_ee_height(x):
-        robot.SetActiveDOFValues(x)
-        return w[1] * (robot.arm.hand.GetTransform()[2,3] - robot.GetTransform()[2,3])
-    def f_ee_extent(x):
-        robot.SetActiveDOFValues(x)
-        return w[2] * np.linalg.norm(robot.arm.hand.GetTransform()[:2,3] - robot.GetTransform()[:2,3])
-    xyz = goal_T[:3,-1].tolist()
-    wxyz = orpy.quatFromRotationMatrix(goal_T[:3,:3]).tolist()
-    ik_solns = get_ik_solns(robot, goal_T)
-    for i in range(min(20, ik_solns.shape[0])):
-        init_joint_target = ik_solns[i].tolist()
-        request = {
-            'basic_info' : {
-                'n_steps' : num_steps,
-                'manip' : robot.arm.GetName(),
-                'start_fixed' : True
-            },
-            'costs' : [
-                {
-                    'type' : 'joint_vel', # \sum_{t,j} (x_{t+1,j} - x_{t,j})^2
-                    'params': {'coeffs' : [w[0]]}
-                },
-                {
-                    'type' : 'collision',
-                    'params' : {
-                        'coeffs' : [20],
-                        'dist_pen' : [0.025]
-                    }
-                }
-            ],
-            'constraints' : [
-                {
-                    'type' : 'pose',
-                    'params' : {
-                        'xyz': xyz,
-                        'wxyz': wxyz,
-                        'link': robot.arm.hand.GetName(),
-                        'timestep': num_steps - 1
-                    }
-                }
-            ],
-            'init_info' : {
-                'type' : 'straight_line',
-                'endpoint' : init_joint_target
-            }
-        }
-        s = json.dumps(request)
-        prob = trajoptpy.ConstructProblem(s, env)
-        for t in range(num_steps):
-            prob.AddCost(f_ee_height, [(t,j) for j in xrange(7)], 'up%i'%t)
-            prob.AddCost(f_ee_extent, [(t,j) for j in xrange(7)], 'up%i'%t)
-        result = trajoptpy.OptimizeProblem(prob)
-        waypoints = result.GetTraj()
-        is_safe = traj_is_safe(
-            waypoints, robot)
-        if is_safe:
-            return waypoints_to_traj(env, robot, waypoints)
-    print('Failed to solve.')
+def feature_height(robot, x):
+    robot.SetActiveDOFValues(x)
+    return robot.arm.hand.GetTransform()[2,3]
+
+
+def feature_extent(robot, x):
+    print('SHOULD NOT BE CALLED.')
+    robot.SetActiveDOFValues(x)
+    return np.linalg.norm(robot.arm.hand.GetTransform()[:2,3] -
+                          robot.GetTransform()[:2,3])
+
+
+def feature_orientation(robot, x):
+    robot.SetActiveDOFValues(x)
+    ee_dir = -1 * robot.GetJoints()[6].GetAxis()
+    upward_dir = np.array([0, 0, 1.])
+    return np.dot(ee_dir, upward_dir)
+
+
+featurizers = [feature_height, feature_orientation]
+
+
+def compute_feature_values(robot, waypoints):
+    result = {}
+    for f in featurizers:
+        total = 0
+        for i in range(waypoints.shape[0]):
+            old = robot.GetActiveDOFValues()
+            total += f(robot, waypoints[i])
+            robot.SetActiveDOFValues(old)
+        mean = total / waypoints.shape[0]
+        result[f.__name__] = mean
+    return result
 
 
 def trajopt_plan_to_config(env, robot, goal_config,
-                           num_steps=10, w=[1, 0, 0],
-                           waypoints=[]):
-    def f_ee_height(x):
-        robot.SetActiveDOFValues(x)
-        return np.array([w[1] * (robot.arm.hand.GetTransform()[2,3] - robot.GetTransform()[2,3])])
-    def f_ee_extent(x):
-        robot.SetActiveDOFValues(x)
-        return w[2] * np.linalg.norm(
-            robot.arm.hand.GetTransform()[:2,3] - robot.GetTransform()[:2,3])
+                           num_steps=10, w=[1, 20, 0, 0],
+                           waypoints=[], duration=10):
+    def cost_height(x):
+        val = w[2] * feature_height(robot, x)
+        return val
+    def cost_orientation(x):
+        val = w[3] * feature_orientation(robot, x)
+        return val
+    def ee_timing_cost(x):
+        x = x.reshape((7, -1)).T
+        return 0
     start_joints = robot.GetActiveDOFValues()
     inits = []
     inits.append(mu.linspace2d(start_joints, goal_config, num_steps))
     waypoint_step = (num_steps - 1) // 2
     for waypoint in waypoints:
-        init = np.empty((num_steps, 7))
-        init[:waypoint_step+1] = mu.linspace2d(start_joints, waypoint, waypoint_step+1)
-        init[waypoint_step:] = mu.linspace2d(waypoint, goal_config, num_steps - waypoint_step)
-        inits.append(init)
+        inits.append(interpolate_waypoint(start_joints, waypoint, goal_config, num_steps))
     joint_target = goal_config.tolist()
     traj = None
     best_cost = np.inf
-    for init in inits:
+    combined_feature_values = []
+    init_unchanged_alert = None
+    for i, init in enumerate(inits):
         request = {
             'basic_info' : {
                 'n_steps' : num_steps,
@@ -107,7 +85,7 @@ def trajopt_plan_to_config(env, robot, goal_config,
                 {
                     'type' : 'collision',
                     'params' : {
-                        'coeffs' : [20],
+                        'coeffs' : [w[1]],
                         'dist_pen' : [0.025]
                     }
                 }
@@ -127,19 +105,42 @@ def trajopt_plan_to_config(env, robot, goal_config,
         prob = trajoptpy.ConstructProblem(s, env)
         for t in range(num_steps):
             prob.AddCost(
-                f_ee_height,
+                cost_height,
                 [(t,j) for j in xrange(7)],
-                'up%i'%t)
+                'height%i'%t)
             prob.AddCost(
-                f_ee_extent,
+                cost_orientation,
                 [(t,j) for j in xrange(7)],
-                'up%i'%t)
+                'orientation%i'%t)
+        prob.AddCost(
+            ee_timing_cost,
+            [(t, j) for t in range(num_steps) for j in range(7)],
+            'ee_timing')
         result = trajoptpy.OptimizeProblem(prob)
         waypoints = result.GetTraj()
         is_safe = traj_is_safe(
             waypoints, robot)
-        total_cost = np.sum(zip(*result.GetCosts())[1])
-        if is_safe and total_cost < best_cost:
-            traj = waypoints_to_traj(env, robot, waypoints)
+        unzipped = zip(*result.GetCosts())
+        total_cost = np.sum(unzipped[1])
+        cost_names = list(unzipped[0])
+        collision_cost = sum([unzipped[1][k] for k in range(len(cost_names))
+                              if 'collision' in cost_names[k]])
+        if w[0] > 0:
+            smoothness_cost = unzipped[1][cost_names.index('joint_vel')] / w[0]
+        else:
+            smoothness_cost = 0
+        feature_values = compute_feature_values(robot, waypoints)
+        feature_values['smoothness'] = smoothness_cost
+        feature_values['collision'] = collision_cost
+        feature_values['total'] = total_cost
+        combined_feature_values.append(feature_values)
+        if total_cost < best_cost:
+            traj = waypoints_to_traj(env, robot, waypoints, duration=duration)
             best_cost = total_cost
-    return traj
+            if np.allclose(waypoints, init):
+                init_unchanged_alert = 'Init {:d}: Result is same as init.'.format(i)
+            else:
+                init_unchanged_alert = None
+    if init_unchanged_alert:
+        print(init_unchanged_alert)
+    return traj, combined_feature_values
