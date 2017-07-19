@@ -40,19 +40,30 @@ def get_ik_solns(robot, goal_T):
         return ik_solutions
 
 
+def get_ee_coords(robot, dofs):
+    current_dofs = robot.GetActiveDOFValues()
+    robot.SetActiveDOFValues(dofs)
+    values = robot.arm.hand.GetTransform()[:3,-1]
+    robot.SetActiveDOFValues(current_dofs)
+    return values
+
+
 def waypoints_to_traj(env, robot, waypoints, duration):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
     indices = robot.GetActiveDOFIndices()
     spec.AddDeltaTimeGroup()
     traj.Init(spec)
-    dt = float(duration) / waypoints.shape[0]
+    ee_positions = np.stack([get_ee_coords(robot, x)
+                             for x in waypoints])
+    ee_dist = np.linalg.norm(np.diff(ee_positions, axis=0), axis=1)
+    total_ee_dist = np.sum(ee_dist)
     for i in range(waypoints.shape[0]):
         wp = np.empty(spec.GetDOF())
+        dt = 0
         if i:
-            spec.InsertDeltaTime(wp, dt)
-        else:
-            spec.InsertDeltaTime(wp, 0)
+            dt = (ee_dist[i-1] / total_ee_dist) * duration
+        spec.InsertDeltaTime(wp, dt)
         spec.InsertJointValues(wp, waypoints[i], robot, indices, 0)
         traj.Insert(i, wp)
     return traj

@@ -49,7 +49,7 @@ def compute_feature_values(robot, waypoints):
 
 def trajopt_plan_to_config(env, robot, goal_config,
                            num_steps=10, w=[1, 20, 0, 0],
-                           waypoints=[], duration=10):
+                           waypoints=[], duration=15):
     def cost_height(x):
         val = w[2] * feature_height(robot, x)
         return val
