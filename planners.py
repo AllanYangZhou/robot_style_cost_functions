@@ -14,7 +14,7 @@ import constants as c
 
 def feature_height(robot, x):
     robot.SetActiveDOFValues(x)
-    return robot.arm.hand.GetTransform()[2,3]
+    return np.square(robot.arm.hand.GetTransform()[2,3] - .222)
 
 
 def feature_extent(robot, x):

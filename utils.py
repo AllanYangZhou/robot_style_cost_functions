@@ -13,14 +13,14 @@ def setup():
     mug = env.GetKinBody('mug')
     env.Remove(table)
     env.Remove(mug)
-    env.Load('{:s}/table.xml'.format(c.iact_ctrl_path))
-    env.Load('{:s}/cabinet.xml'.format(c.iact_ctrl_path))
-    table = env.GetKinBody('table')
-    cabinet = env.GetKinBody('cabinet')
-    cabinet.SetTransform(c.cabinet_T)
-    table.SetTransform(c.table_T)
-    cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.cabinet_color)
-    table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.table_color)
+    # env.Load('{:s}/table.xml'.format(c.iact_ctrl_path))
+    # env.Load('{:s}/cabinet.xml'.format(c.iact_ctrl_path))
+    # table = env.GetKinBody('table')
+    # cabinet = env.GetKinBody('cabinet')
+    # cabinet.SetTransform(c.cabinet_T)
+    # table.SetTransform(c.table_T)
+    # cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.cabinet_color)
+    # table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.table_color)
     env.Load('/usr/local/share/openrave-0.9/data/box1.kinbody.xml')
     box = env.GetKinBody('box1')
     box.SetTransform(c.box_T)
@@ -48,21 +48,60 @@ def get_ee_coords(robot, dofs):
     return values
 
 
+def constant_ee_timing(waypoints, robot, duration):
+    ee_positions = np.stack([get_ee_coords(robot, x)
+                             for x in waypoints])
+    ee_dist = np.linalg.norm(np.diff(ee_positions, axis=0), axis=1)
+    total_ee_dist = np.sum(ee_dist)
+    dts = []
+    for i in range(waypoints.shape[0]):
+        dt = 0
+        if i:
+            dt = (ee_dist[i-1] / total_ee_dist) * duration
+        dts.append(dt)
+    return np.array(dts)
+
+
+def quadratic_ee_timing(waypoints, robot, duration):
+    ee_positions = np.stack([get_ee_coords(robot, x)
+                             for x in waypoints])
+    ee_dist = np.linalg.norm(np.diff(ee_positions, axis=0), axis=1)
+    cum_ee_dist = np.cumsum(ee_dist)
+    total_ee_dist = np.sum(ee_dist)
+    b = np.array([0, total_ee_dist])
+    T3 = np.power(duration, 3)
+    T2 = np.square(duration)
+    A = np.array([[T2, duration], [T3/3, T2/2]])
+    x = np.linalg.solve(A, b)
+    dts = []
+    times = []
+    for i in range(waypoints.shape[0]):
+        dt = 0
+        if i:
+            roots = np.roots([x[0] / 3, x[1] / 2, 0, -cum_ee_dist[i-1]])
+            roots = roots[roots > 0]
+            roots = roots[roots < duration]
+            time = roots[0]
+            if np.iscomplex(time):
+                time = time.real
+            dt = time
+            if i > 1:
+                dt = time - times[-1]
+            times.append(time)
+        dts.append(dt)
+    return np.array(dts)
+
+
 def waypoints_to_traj(env, robot, waypoints, duration):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
     indices = robot.GetActiveDOFIndices()
     spec.AddDeltaTimeGroup()
     traj.Init(spec)
-    ee_positions = np.stack([get_ee_coords(robot, x)
-                             for x in waypoints])
-    ee_dist = np.linalg.norm(np.diff(ee_positions, axis=0), axis=1)
-    total_ee_dist = np.sum(ee_dist)
+    dts = constant_ee_timing(waypoints, robot, duration)
     for i in range(waypoints.shape[0]):
         wp = np.empty(spec.GetDOF())
-        dt = 0
-        if i:
-            dt = (ee_dist[i-1] / total_ee_dist) * duration
+        dt = dts[i]
         spec.InsertDeltaTime(wp, dt)
         spec.InsertJointValues(wp, waypoints[i], robot, indices, 0)
         traj.Insert(i, wp)
