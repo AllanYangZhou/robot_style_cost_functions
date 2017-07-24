@@ -4,7 +4,7 @@ import numpy as np
 import constants as c
 import trajoptpy.math_utils as mu
 
-def setup():
+def setup(objects=False):
     env, robot = interactpy.initialize()
     robot.SetActiveDOFs(robot.arm.GetArmIndices())
     robot.SetActiveDOFValues(c.starting_angles)
@@ -13,14 +13,15 @@ def setup():
     mug = env.GetKinBody('mug')
     env.Remove(table)
     env.Remove(mug)
-    # env.Load('{:s}/table.xml'.format(c.iact_ctrl_path))
-    # env.Load('{:s}/cabinet.xml'.format(c.iact_ctrl_path))
-    # table = env.GetKinBody('table')
-    # cabinet = env.GetKinBody('cabinet')
-    # cabinet.SetTransform(c.cabinet_T)
-    # table.SetTransform(c.table_T)
-    # cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.cabinet_color)
-    # table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.table_color)
+    if objects:
+        env.Load('{:s}/table.xml'.format(c.iact_ctrl_path))
+        env.Load('{:s}/cabinet.xml'.format(c.iact_ctrl_path))
+        table = env.GetKinBody('table')
+        cabinet = env.GetKinBody('cabinet')
+        cabinet.SetTransform(c.cabinet_T)
+        table.SetTransform(c.table_T)
+        cabinet.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.cabinet_color)
+        table.GetLinks()[0].GetGeometries()[0].SetDiffuseColor(c.table_color)
     env.Load('/usr/local/share/openrave-0.9/data/box1.kinbody.xml')
     box = env.GetKinBody('box1')
     box.SetTransform(c.box_T)
