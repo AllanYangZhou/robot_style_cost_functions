@@ -4,6 +4,8 @@ import numpy as np
 import constants as c
 import trajoptpy.math_utils as mu
 from scipy.interpolate import interp1d
+import matplotlib.pyplot as plt
+
 
 def setup(objects=False):
     env, robot = interactpy.initialize()
@@ -163,3 +165,15 @@ def interpolate_waypoint(start, waypoint, end, num_steps):
 
 def check_trajs_equal(traj1, traj2):
     return np.allclose(traj1.GetAllWaypoints2D(), traj2.GetAllWaypoints2D())
+
+
+def plot_ee_speed(traj, robot):
+    ee_coords = []
+    dt = traj.GetDuration() / (100 - 1)
+    for i in range(100):
+        wp = traj.Sample(i * dt)[:7]
+        ee_coords.append(get_ee_coords(robot, wp))
+    ee_coords = np.stack(ee_coords)
+    ee_speed = np.linalg.norm(np.diff(ee_coords, axis=0), axis=1)
+    plt.ylim([0, 1.1 * np.max(ee_speed)])
+    plt.plot(ee_speed)
