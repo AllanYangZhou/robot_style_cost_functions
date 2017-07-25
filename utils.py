@@ -3,6 +3,7 @@ import openravepy as orpy
 import numpy as np
 import constants as c
 import trajoptpy.math_utils as mu
+from scipy.interpolate import interp1d
 
 def setup(objects=False):
     env, robot = interactpy.initialize()
@@ -49,6 +50,12 @@ def get_ee_coords(robot, dofs):
     return values
 
 
+def constant_timing(waypoints, robot, duration):
+    n = waypoints.shape[0]
+    dt = float(duration) / (n - 1)
+    return np.array([0] + (n - 1) * [dt])
+
+
 def constant_ee_timing(waypoints, robot, duration):
     ee_positions = np.stack([get_ee_coords(robot, x)
                              for x in waypoints])
@@ -61,6 +68,10 @@ def constant_ee_timing(waypoints, robot, duration):
             dt = (ee_dist[i-1] / total_ee_dist) * duration
         dts.append(dt)
     return np.array(dts)
+
+
+def natural_ee_timing(waypoints, robot, duration):
+    pass
 
 
 def quadratic_ee_timing(waypoints, robot, duration):
@@ -93,6 +104,23 @@ def quadratic_ee_timing(waypoints, robot, duration):
     return np.array(dts)
 
 
+def retime_traj(env, robot, traj_old, f):
+    t_prime = f(np.arange(100))
+    traj = orpy.RaveCreateTrajectory(env, '')
+    spec = robot.GetActiveConfigurationSpecification('linear')
+    indices = robot.GetActiveDOFIndices()
+    spec.AddDeltaTimeGroup()
+    traj.Init(spec)
+    for i in range(100):
+        wp = traj_old.Sample((t_prime[i] / 99.) * traj_old.GetDuration())
+        dt = 0
+        if i:
+            dt = traj_old.GetDuration() / 99.
+        spec.InsertDeltaTime(wp, dt)
+        traj.Insert(i, wp)
+    return traj
+
+
 def waypoints_to_traj(env, robot, waypoints, duration):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
@@ -106,7 +134,8 @@ def waypoints_to_traj(env, robot, waypoints, duration):
         spec.InsertDeltaTime(wp, dt)
         spec.InsertJointValues(wp, waypoints[i], robot, indices, 0)
         traj.Insert(i, wp)
-    return traj
+    f = interp1d([0, 19, 80, 99], [0, 9, 90, 99], kind='quadratic')
+    return retime_traj(env, robot, traj, f)
 
 
 def make_orientation_cost(robot):

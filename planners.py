@@ -5,7 +5,8 @@ from utils import (
     waypoints_to_traj,
     get_ik_solns,
     interpolate_waypoint,
-    check_trajs_equal)
+    check_trajs_equal,
+    get_ee_coords)
 import trajoptpy
 import trajoptpy.math_utils as mu
 from trajoptpy.check_traj import traj_is_safe
@@ -56,9 +57,12 @@ def trajopt_plan_to_config(env, robot, goal_config,
     def cost_orientation(x):
         val = w[3] * feature_orientation(robot, x)
         return val
-    def ee_timing_cost(x):
-        x = x.reshape((7, -1)).T
-        return 0
+    def ee_timing_cost(waypoints):
+        waypoints = waypoints.reshape((7, -1)).T
+        ee_positions = np.stack([get_ee_coords(robot, x)
+                                 for x in waypoints])
+        ee_vel = np.square(np.diff(ee_positions, n=2, axis=0))
+        return np.sum(ee_vel)
     start_joints = robot.GetActiveDOFValues()
     inits = []
     inits.append(mu.linspace2d(start_joints, goal_config, num_steps))
@@ -112,10 +116,10 @@ def trajopt_plan_to_config(env, robot, goal_config,
                 cost_orientation,
                 [(t,j) for j in xrange(7)],
                 'orientation%i'%t)
-        prob.AddCost(
-            ee_timing_cost,
-            [(t, j) for t in range(num_steps) for j in range(7)],
-            'ee_timing')
+        # prob.AddCost(
+        #     ee_timing_cost,
+        #     [(t, j) for t in range(num_steps) for j in range(7)],
+        #     'ee_timing')
         result = trajoptpy.OptimizeProblem(prob)
         waypoints = result.GetTraj()
         is_safe = traj_is_safe(
