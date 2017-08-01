@@ -89,7 +89,7 @@ def trajopt_plan_to_config(env, robot, goal_config,
                 {
                     'type' : 'collision',
                     'params' : {
-                        'coeffs' : [w[1]],
+                        'coeffs' : [10 * w[1]],
                         'dist_pen' : [0.025]
                     }
                 }
