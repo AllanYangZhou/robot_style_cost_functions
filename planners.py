@@ -49,13 +49,14 @@ def compute_feature_values(robot, waypoints):
 
 
 def trajopt_plan_to_config(env, robot, goal_config,
-                           num_steps=10, w=[1, 20, 0, 0],
-                           waypoints=[], duration=15):
+                           num_steps=10, w=[0, 0],
+                           waypoints=[], duration=15,
+                           retimer=None):
     def cost_height(x):
-        val = w[2] * feature_height(robot, x)
+        val = w[0] * feature_height(robot, x)
         return val
     def cost_orientation(x):
-        val = w[3] * feature_orientation(robot, x)
+        val = w[1] * feature_orientation(robot, x)
         return val
     def ee_timing_cost(waypoints):
         waypoints = waypoints.reshape((7, -1)).T
@@ -84,12 +85,12 @@ def trajopt_plan_to_config(env, robot, goal_config,
             'costs' : [
                 {
                     'type' : 'joint_vel', # \sum_{t,j} (x_{t+1,j} - x_{t,j})^2
-                    'params': {'coeffs' : [w[0]]}
+                    'params': {'coeffs' : [1]}
                 },
                 {
                     'type' : 'collision',
                     'params' : {
-                        'coeffs' : [10 * w[1]],
+                        'coeffs' : [10 * 2],
                         'dist_pen' : [0.025]
                     }
                 }
@@ -129,17 +130,14 @@ def trajopt_plan_to_config(env, robot, goal_config,
         cost_names = list(unzipped[0])
         collision_cost = sum([unzipped[1][k] for k in range(len(cost_names))
                               if 'collision' in cost_names[k]])
-        if w[0] > 0:
-            smoothness_cost = unzipped[1][cost_names.index('joint_vel')] / w[0]
-        else:
-            smoothness_cost = 0
+        smoothness_cost = unzipped[1][cost_names.index('joint_vel')]
         feature_values = compute_feature_values(robot, waypoints)
         feature_values['smoothness'] = smoothness_cost
         feature_values['collision'] = collision_cost
         feature_values['total'] = total_cost
         combined_feature_values.append(feature_values)
         if total_cost < best_cost:
-            traj = waypoints_to_traj(env, robot, waypoints, duration=duration)
+            traj = waypoints_to_traj(env, robot, waypoints, duration, retimer)
             best_cost = total_cost
             if np.allclose(waypoints, init):
                 init_unchanged_alert = 'Init {:d}: Result is same as init.'.format(i)

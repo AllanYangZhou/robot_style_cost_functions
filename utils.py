@@ -123,7 +123,7 @@ def retime_traj(env, robot, traj_old, f):
     return traj
 
 
-def waypoints_to_traj(env, robot, waypoints, duration):
+def waypoints_to_traj(env, robot, waypoints, duration, retimer):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
     indices = robot.GetActiveDOFIndices()
@@ -136,8 +136,9 @@ def waypoints_to_traj(env, robot, waypoints, duration):
         spec.InsertDeltaTime(wp, dt)
         spec.InsertJointValues(wp, waypoints[i], robot, indices, 0)
         traj.Insert(i, wp)
-    f = interp1d([0, 19, 80, 99], [0, 9, 90, 99], kind='quadratic')
-    return retime_traj(env, robot, traj, f)
+    if retimer is None:
+        retimer = interp1d([0, 19, 80, 99], [0, 9, 90, 99], kind='quadratic')
+    return retime_traj(env, robot, traj, retimer)
 
 
 def make_orientation_cost(robot):
