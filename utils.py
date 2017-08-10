@@ -7,8 +7,8 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 
-def setup(objects=False):
-    env, robot = interactpy.initialize()
+def setup(objects=False, render=True):
+    env, robot = interactpy.initialize(render=render)
     robot.SetActiveDOFs(robot.arm.GetArmIndices())
     robot.SetActiveDOFValues(c.starting_angles)
     robot.SetDOFValues(c.starting_finger_angles, [7,8,9])
@@ -29,8 +29,9 @@ def setup(objects=False):
     box = env.GetKinBody('box1')
     box.SetTransform(c.box_T)
     robot.Grab(box)
-    viewer = env.GetViewer()
-    viewer.SetCamera(c.camera_T)
+    if render:
+        viewer = env.GetViewer()
+        viewer.SetCamera(c.camera_T)
     return env, robot
 
 
@@ -178,3 +179,24 @@ def plot_ee_speed(traj, robot):
     ee_speed = np.linalg.norm(np.diff(ee_coords, axis=0), axis=1)
     plt.ylim([0, 1.1 * np.max(ee_speed)])
     plt.plot(ee_speed)
+
+
+def evaluate_costs(robot, waypoints, custom_costs):
+    current_dofs = robot.GetActiveDOFValues()
+    costs = [sum([cost_fn(wp) for cost_fn in custom_costs.values()])
+             for wp in waypoints]
+    robot.SetActiveDOFValues(current_dofs)
+    return sum(cost)
+
+
+def append_ee_position(robot, waypoints):
+    current_dofs = robot.GetActiveDOFValues()
+    ee_positions = []
+    for wp in waypoints:
+        robot.SetActiveDOFValues(wp)
+        ee_pos = robot.arm.GetEndEffectorTransform()[:3,-1]
+        base_pos = robot.GetTransform()[:3,-1]
+        ee_positions.append(ee_pos - base_pos)
+    ee_positions = np.stack(ee_positions)
+    robot.SetActiveDOFValues(current_dofs)
+    return np.concatenate([waypoints, ee_positions], axis=1)

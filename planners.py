@@ -32,10 +32,9 @@ def feature_orientation(robot, x):
     return np.dot(ee_dir, upward_dir)
 
 
-featurizers = [feature_height, feature_orientation]
-
-
-def trajopt_simple_plan(env, robot, goal_config, num_steps=10, custom_costs={}, init=None):
+def trajopt_simple_plan(env, robot, goal_config,
+                        num_steps=10, custom_costs={},
+                        init=None, custom_traj_costs={}):
     start_joints = robot.GetActiveDOFValues()
     if init is None:
         init = mu.linspace2d(start_joints, goal_config, num_steps)
@@ -78,6 +77,12 @@ def trajopt_simple_plan(env, robot, goal_config, num_steps=10, custom_costs={}, 
                 cost_fn,
                 [(t,j) for j in range(7)],
                 '{:s}{:d}'.format(cost_name, t))
+    for cost_name in custom_traj_costs:
+        cost_fn = custom_traj_costs[cost_name]
+        prob.AddCost(
+            cost_fn,
+            [(t,j) for t in range(num_steps) for j in range(7)],
+            cost_name)
     result = trajoptpy.OptimizeProblem(prob)
     return result
 
