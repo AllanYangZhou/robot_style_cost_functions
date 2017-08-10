@@ -2,6 +2,7 @@ import tensorflow as tf
 from keras.layers import Dense, Dropout, LeakyReLU
 from keras.models import Sequential
 from keras import backend as K
+import numpy as np
 
 
 class MLP:
@@ -22,7 +23,7 @@ class MLP:
 
 
 class CostFunction:
-    def __init__(self, load_path=None, num_wps=10, num_dofs=10):
+    def __init__(self, load_path=None, num_wps=10, num_dofs=10, per_waypoint=False):
         self.sess = tf.Session()
         self.trajA_ph = tf.placeholder(tf.float32, shape=[None, num_wps, num_dofs], name='trajA_ph')
         self.trajB_ph = tf.placeholder(tf.float32, shape=[None, num_wps, num_dofs], name='trajB_ph')
@@ -30,24 +31,39 @@ class CostFunction:
         self.score_label_ph = tf.placeholder(tf.float32, shape=[None], name='score_label_ph')
 
         batch_size = tf.shape(self.trajA_ph)[0]
-        input_dim = num_dofs * num_wps
-        trajA = tf.reshape(self.trajA_ph, [batch_size, input_dim])
-        trajB = tf.reshape(self.trajB_ph, [batch_size, input_dim])
+        input_dim = num_dofs if per_waypoint else num_dofs * num_wps
         self.mlp = MLP(input_dim)
-        self.scoreA, self.scoreB = self.mlp(trajA), self.mlp(trajB)
+        if per_waypoint:
+            A_scores, B_scores = [], []
+            for wp in range(num_wps):
+                A_scores.append(self.mlp(self.trajA_ph[:,wp,:]))
+                B_scores.append(self.mlp(self.trajB_ph[:,wp,:]))
+            self.scoreA = tf.add_n(A_scores)
+            self.scoreB = tf.add_n(B_scores)
+        else:
+            trajA = tf.reshape(self.trajA_ph, [batch_size, input_dim])
+            trajB = tf.reshape(self.trajB_ph, [batch_size, input_dim])
+            self.scoreA, self.scoreB = self.mlp(trajA), self.mlp(trajB)
         # Probability proportional to e^{-cost}
         score_logits = -1 * tf.concat([self.scoreA, self.scoreB], axis=-1)
         self.loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=score_logits, labels=self.label_ph))
+        # tf.summary.scalar('loss', self.loss)
         self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
         self.score_loss = tf.reduce_mean(tf.square(self.scoreA - self.score_label_ph))
+        # tf.summary.scalar('score_loss', self.score_loss)
         self.score_train_op = tf.train.AdamOptimizer().minimize(self.score_loss)
+
+        # self.summary_op = tf.merge_all_summaries()
+        # self.train_writer = tf.summary.FileWriter()
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver()
         self.sess.run(init_op)
         if load_path:
             self.load_model(load_path)
+        self.num_params = np.sum([np.prod(v.shape) for v in tf.get_collection(
+            tf.GraphKeys.TRAINABLE_VARIABLES)])
 
     def score(self, waypoints):
         # Returns cost for a single trajectory with shape (num_wps, 7)
