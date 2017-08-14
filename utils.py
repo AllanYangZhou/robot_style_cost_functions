@@ -73,10 +73,6 @@ def constant_ee_timing(waypoints, robot, duration):
     return np.array(dts)
 
 
-def natural_ee_timing(waypoints, robot, duration):
-    pass
-
-
 def quadratic_ee_timing(waypoints, robot, duration):
     ee_positions = np.stack([get_ee_coords(robot, x)
                              for x in waypoints])
