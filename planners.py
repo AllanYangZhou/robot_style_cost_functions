@@ -159,7 +159,7 @@ def make_pose_constraint_callback(pose_constraints):
     return callback
 
 
-def modify_traj(env, robot, wps, k=5):
+def modify_traj(env, robot, wps, k=5, num=1):
     x0 = get_ee_coords(robot, wps[k-1])
     x1 = get_ee_coords(robot, wps[k])
     x2 = get_ee_coords(robot, wps[k+1])
@@ -173,11 +173,17 @@ def modify_traj(env, robot, wps, k=5):
     L = np.diag([v, v, 0])
     S = U.dot(L).dot(U.T)
 
-    sample_pos = np.random.multivariate_normal(x1, S)
-    soln = get_pos_ik_soln(robot, sample_pos)
-    ee_T = get_ee_transform(robot, soln)
-    p_const = {k: ee_T}
-
-    rc = [collision_cost_callback, make_pose_constraint_callback(p_const)]
-    new_result = trajopt_simple_plan(env, robot, c.goal_angles, request_callbacks=rc)
-    return new_result
+    new_results = []
+    for i in range(num):
+        sample_pos = np.random.multivariate_normal(x1, S)
+        soln = get_pos_ik_soln(robot, sample_pos)
+        ee_T = get_ee_transform(robot, soln)
+        rc = [
+            collision_cost_callback,
+            make_pose_constraint_callback({k: ee_T})]
+        new_results.append(trajopt_simple_plan(
+            env,
+            robot,
+            c.goal_angles,
+            request_callbacks=rc))
+    return new_results
