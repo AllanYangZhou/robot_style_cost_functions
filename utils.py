@@ -32,6 +32,11 @@ def setup(objects=False, render=True):
     if render:
         viewer = env.GetViewer()
         viewer.SetCamera(c.camera_T)
+    ikmodel3D = (
+        orpy.databases.inversekinematics.InverseKinematicsModel(
+            robot, iktype=orpy.IkParameterization.Type.Translation3D))
+    if not ikmodel3D.load():
+        ikmodel3D.autogenerate()
     return env, robot
 
 
@@ -45,12 +50,16 @@ def get_ik_solns(robot, goal_T):
         return ik_solutions
 
 
-def get_ee_coords(robot, dofs):
+def get_ee_transform(robot, dofs):
     current_dofs = robot.GetActiveDOFValues()
     robot.SetActiveDOFValues(dofs)
-    values = robot.arm.hand.GetTransform()[:3,-1]
+    values = robot.arm.hand.GetTransform()
     robot.SetActiveDOFValues(current_dofs)
     return values
+
+
+def get_ee_coords(robot, dofs):
+    return get_ee_transform(robot, dofs)[:3,-1]
 
 
 def constant_timing(waypoints, robot, duration):
@@ -182,7 +191,7 @@ def evaluate_costs(robot, waypoints, custom_costs):
     costs = [sum([cost_fn(wp) for cost_fn in custom_costs.values()])
              for wp in waypoints]
     robot.SetActiveDOFValues(current_dofs)
-    return sum(cost)
+    return sum(costs)
 
 
 def append_ee_position(robot, waypoints):
@@ -196,3 +205,25 @@ def append_ee_position(robot, waypoints):
     ee_positions = np.stack(ee_positions)
     robot.SetActiveDOFValues(current_dofs)
     return np.concatenate([waypoints, ee_positions], axis=1)
+
+
+def normalize_vec(x):
+    return x / np.linalg.norm(x)
+
+
+def get_pos_ik_soln(robot, x):
+    ik_param = orpy.IkParameterization(
+        x, orpy.IkParameterizationType.Translation3D)
+    ik_solution = robot.arm.FindIKSolution(
+        ik_param, orpy.IkFilterOptions.CheckEnvCollisions,
+        ikreturn=False, releasegil=True)
+    return ik_solution
+
+
+def get_pos_ik_solns(robot, x):
+    ik_param = orpy.IkParameterization(
+        x, orpy.IkParameterizationType.Translation3D)
+    ik_solution = robot.arm.FindIKSolutions(
+        ik_param, orpy.IkFilterOptions.CheckEnvCollisions,
+        ikreturn=False, releasegil=True)
+    return ik_solution

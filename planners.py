@@ -3,10 +3,12 @@ import openravepy as orpy
 import json
 from utils import (
     waypoints_to_traj,
-    get_ik_solns,
     interpolate_waypoint,
     check_trajs_equal,
-    get_ee_coords)
+    get_ee_coords,
+    get_ee_transform,
+    normalize_vec,
+    get_pos_ik_soln)
 import trajoptpy
 import trajoptpy.math_utils as mu
 from trajoptpy.check_traj import traj_is_safe
@@ -34,7 +36,8 @@ def feature_orientation(robot, x):
 
 def trajopt_simple_plan(env, robot, goal_config,
                         num_steps=10, custom_costs={},
-                        init=None, custom_traj_costs={}):
+                        init=None, custom_traj_costs={},
+                        request_callbacks=[]):
     start_joints = robot.GetActiveDOFValues()
     if init is None:
         init = mu.linspace2d(start_joints, goal_config, num_steps)
@@ -68,6 +71,7 @@ def trajopt_simple_plan(env, robot, goal_config,
             'data': init.tolist()
         }
     }
+    [callback(request) for callback in request_callbacks]
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, env)
     for t in range(num_steps):
@@ -131,3 +135,49 @@ def trajopt_plan_to_config(env, robot, goal_config,
     if init_unchanged_alert:
         print(init_unchanged_alert)
     return traj
+
+
+def collision_cost_callback(request):
+    request['costs'][1]['params']['coeffs'] = [100]
+    request['costs'][1]['params']['continuous'] = False
+
+
+def make_pose_constraint_callback(pose_constraints):
+    def callback(request):
+        for t in pose_constraints:
+            pose = orpy.poseFromMatrix(pose_constraints[t])
+            quat, xyz = pose[:4], pose[4:]
+            request['constraints'].append({
+                'type': 'pose',
+                'params': {
+                    'timestep': t,
+                    'xyz': xyz.tolist(),
+                    'wxyz': quat.tolist(),
+                    'link': 'j2s7s300_link_7'
+                }
+            })
+    return callback
+
+
+def modify_traj(env, robot, wps, k=5):
+    x0 = get_ee_coords(robot, wps[k-1])
+    x1 = get_ee_coords(robot, wps[k])
+    x2 = get_ee_coords(robot, wps[k+1])
+    vert = np.array([0, 0, 1])
+    n = normalize_vec(x2-x0)
+    proj_vert_n = np.dot(vert, n) * n
+    near_vert = normalize_vec(vert - proj_vert_n)
+    horiz = normalize_vec(np.cross(n, near_vert))
+    v = .0001
+    U = np.stack([near_vert, horiz, n], axis=1)
+    L = np.diag([v, v, 0])
+    S = U.dot(L).dot(U.T)
+
+    sample_pos = np.random.multivariate_normal(x1, S)
+    soln = get_pos_ik_soln(robot, sample_pos)
+    ee_T = get_ee_transform(robot, soln)
+    p_const = {k: ee_T}
+
+    rc = [collision_cost_callback, make_pose_constraint_callback(p_const)]
+    new_result = trajopt_simple_plan(env, robot, c.goal_angles, request_callbacks=rc)
+    return new_result
