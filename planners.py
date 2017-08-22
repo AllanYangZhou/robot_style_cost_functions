@@ -159,22 +159,25 @@ def make_pose_constraint_callback(pose_constraints):
     return callback
 
 
-def modify_traj(env, robot, wps, k=5, num=1):
-    x0 = get_ee_coords(robot, wps[k-1])
-    x1 = get_ee_coords(robot, wps[k])
-    x2 = get_ee_coords(robot, wps[k+1])
-    vert = np.array([0, 0, 1])
-    n = normalize_vec(x2-x0)
-    proj_vert_n = np.dot(vert, n) * n
-    near_vert = normalize_vec(vert - proj_vert_n)
-    horiz = normalize_vec(np.cross(n, near_vert))
-    v = .0001
-    U = np.stack([near_vert, horiz, n], axis=1)
-    L = np.diag([v, v, 0])
-    S = U.dot(L).dot(U.T)
-
+def modify_traj(env, robot, wps, num=1, verbose=False):
     new_results = []
     for i in range(num):
+        if verbose and i % 10 == 0:
+            print('Reached iteration {:d}.'.format(i))
+        k = np.random.randint(1, 9)
+        x0 = get_ee_coords(robot, wps[k-1])
+        x1 = get_ee_coords(robot, wps[k])
+        x2 = get_ee_coords(robot, wps[k+1])
+        vert = np.array([0, 0, 1])
+        n = normalize_vec(x2-x0)
+        proj_vert_n = np.dot(vert, n) * n
+        near_vert = normalize_vec(vert - proj_vert_n)
+        horiz = normalize_vec(np.cross(n, near_vert))
+        v = .0001
+        U = np.stack([near_vert, horiz, n], axis=1)
+        L = np.diag([v, v, 0])
+        S = U.dot(L).dot(U.T)
+
         sample_pos = np.random.multivariate_normal(x1, S)
         soln = get_pos_ik_soln(robot, sample_pos)
         ee_T = get_ee_transform(robot, soln)

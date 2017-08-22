@@ -5,6 +5,7 @@ import openravepy as orpy
 import utils
 import planners
 from planners import feature_orientation, feature_height
+import constants as c
 
 
 parser = argparse.ArgumentParser()
@@ -33,28 +34,35 @@ goal_T = np.array([[-0.74517836,  0.65465541,  0.12702559, -0.64859624],
                    [-0.00105579, -0.19163959,  0.9814648 ,  0.22241211],
                    [ 0.        ,  0.        ,  0.        ,  1.        ]])
 
-start_configs = robot.arm.FindIKSolutions(start_T, orpy.IkFilterOptions.CheckEnvCollisions)
-end_configs = robot.arm.FindIKSolutions(goal_T, orpy.IkFilterOptions.CheckEnvCollisions)
-np.random.shuffle(start_configs)
-np.random.shuffle(end_configs)
+# start_configs = robot.arm.FindIKSolutions(start_T, orpy.IkFilterOptions.CheckEnvCollisions)
+# end_configs = robot.arm.FindIKSolutions(goal_T, orpy.IkFilterOptions.CheckEnvCollisions)
+# np.random.shuffle(start_configs)
+# np.random.shuffle(end_configs)
 #cutoff = args.num_configs
-start_configs = start_configs[:100]
-end_configs = end_configs[:10]
+# start_configs = start_configs[:100]
+# end_configs = end_configs[:10]
 
-count = 0
-results = []
-for start_config in start_configs:
-    for end_config in end_configs:
-        if count % 200 == 0:
-            print('Reached iteration {:d}'.format(count))
-        robot.SetActiveDOFValues(start_config)
-        result = planners.trajopt_simple_plan(
-            env,
-            robot,
-            end_config,
-            custom_costs=custom_costs)
-        results.append(result)
-        count += 1
+# count = 0
+# results = []
+# for start_config in start_configs:
+#     for end_config in end_configs:
+#         if count % 200 == 0:
+#             print('Reached iteration {:d}'.format(count))
+#         robot.SetActiveDOFValues(start_config)
+#         result = planners.trajopt_simple_plan(
+#             env,
+#             robot,
+#             end_config,
+#             custom_costs=custom_costs)
+#         results.append(result)
+#         count += 1
+start_result = planners.trajopt_simple_plan(
+    env,
+    robot,
+    c.goal_angles,
+    custom_costs=custom_costs)
+results = planners.modify_traj(env, robot, start_result.GetTraj(), num=999, verbose=True)
+results.append(start_result)
 
 X_pretrain = []
 y_pretrain = []
