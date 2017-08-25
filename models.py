@@ -67,26 +67,26 @@ class CostFunction:
         self.num_params = np.sum([np.prod(v.shape) for v in tf.get_collection(
             tf.GraphKeys.TRAINABLE_VARIABLES)])
 
-    def cost_waypoint(self, waypoint, learning_phase=False):
+    def cost_waypoint(self, waypoint):
         cost = self.sess.run(self.waypoint_cost, feed_dict={
             self.waypoint_ph: waypoint[None],
-            K.learning_phase(): learning_phase
+            K.learning_phase(): False
         })
         return np.squeeze(cost)
 
-    def cost_traj(self, waypoints, learning_phase=False):
+    def cost_traj(self, waypoints):
         '''Returns cost for a single trajectory with shape (num_wps, 7).'''
         cost = self.sess.run(self.costA, feed_dict={
             self.trajA_ph: waypoints[None],
-            K.learning_phase(): learning_phase
+            K.learning_phase(): False
         })
         return np.squeeze(cost)
 
-    def cost_traj_batch(self, trajs, learning_phase=False):
+    def cost_traj_batch(self, trajs):
         '''Returns cost for a batch of trajs with shape (num_trajs, num_wps, 7).'''
         cost = self.sess.run(self.costA, feed_dict={
             self.trajA_ph: trajs,
-            K.learning_phase(): learning_phase
+            K.learning_phase(): False
         })
         return np.squeeze(cost)
 
