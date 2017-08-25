@@ -227,3 +227,9 @@ def get_pos_ik_solns(robot, x):
         ik_param, orpy.IkFilterOptions.CheckEnvCollisions,
         ikreturn=False, releasegil=True)
     return ik_solution
+
+
+def plot_waypoints(env, robot, waypoints, size=12, color='#ff3300'):
+    color_arr = np.array([int(color[i+1:i+3], 16) for i in (0, 2 ,4)]) / 255.
+    ee_coords = np.stack([get_ee_coords(robot, wp) for wp in waypoints])
+    return env.plot3(ee_coords, size, color_arr)

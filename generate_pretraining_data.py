@@ -56,6 +56,7 @@ goal_T = np.array([[-0.74517836,  0.65465541,  0.12702559, -0.64859624],
 #             custom_costs=custom_costs)
 #         results.append(result)
 #         count += 1
+
 start_result = planners.trajopt_simple_plan(
     env,
     robot,
