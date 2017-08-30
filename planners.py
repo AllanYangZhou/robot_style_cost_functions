@@ -164,7 +164,8 @@ def modify_traj(env, robot, wps, num=1, verbose=False):
     for i in range(num):
         if verbose and i % 10 == 0:
             print('Reached iteration {:d}.'.format(i))
-        k = np.random.randint(1, 9)
+        #k = np.random.randint(1, 9)
+        k=np.random.randint(4, 6)
         x0 = get_ee_coords(robot, wps[k-1])
         x1 = get_ee_coords(robot, wps[k])
         x2 = get_ee_coords(robot, wps[k+1])
