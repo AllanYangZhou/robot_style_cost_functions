@@ -233,3 +233,16 @@ def plot_waypoints(env, robot, waypoints, size=12, color='#ff3300'):
     color_arr = np.array([int(color[i+1:i+3], 16) for i in (0, 2 ,4)]) / 255.
     ee_coords = np.stack([get_ee_coords(robot, wp) for wp in waypoints])
     return env.plot3(ee_coords, size, color_arr)
+
+def num_diff_hess(f, x, eps=1e-5):
+    y = f(x)
+    xp = x.copy()
+    hess = np.zeros(x.shape[0])
+    for i in range(x.shape[0]):
+        xp[i] = x[i] + (eps/2)
+        yp = f(xp)
+        xp[i] = x[i] - (eps/2)
+        ym = f(xp)
+        hess[i] = (yp + ym - 2*y) / ((eps * eps) / 4)
+        xp[i] = x[i]
+    return hess
