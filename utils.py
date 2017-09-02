@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 def setup(objects=False, render=True):
     env, robot = interactpy.initialize(render=render)
     robot.SetActiveDOFs(robot.arm.GetArmIndices())
-    robot.SetActiveDOFValues(c.starting_angles)
+    robot.SetActiveDOFValues(c.configs[0])
     robot.SetDOFValues(c.starting_finger_angles, [7,8,9])
     table = env.GetKinBody('table')
     mug = env.GetKinBody('mug')
@@ -234,8 +234,7 @@ def plot_waypoints(env, robot, waypoints, size=12, color='#ff3300'):
     ee_coords = np.stack([get_ee_coords(robot, wp) for wp in waypoints])
     return env.plot3(ee_coords, size, color_arr)
 
-def num_diff_hess(f, x, eps=1e-5):
-    y = f(x)
+def num_hess(f, x, eps=1e-5):
     xp = x.copy()
     hess = np.zeros(x.shape[0])
     for i in range(x.shape[0]):
@@ -246,3 +245,15 @@ def num_diff_hess(f, x, eps=1e-5):
         hess[i] = (yp + ym - 2*y) / ((eps * eps) / 4)
         xp[i] = x[i]
     return hess
+
+def num_diff(f, x, eps=1e-5):
+    xp = x.copy()
+    grad = np.zeros(x.shape[0])
+    for i in range(x.shape[0]):
+        xp[i] = x[i] + (eps/2.)
+        yp = f(xp)
+        xp[i] = x[i] - (eps/2.)
+        ym = f(xp)
+        grad[i] = (yp - ym) / eps
+        xp[i] = x[i]
+    return grad
