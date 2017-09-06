@@ -34,50 +34,29 @@ goal_T = np.array([[-0.74517836,  0.65465541,  0.12702559, -0.64859624],
                    [-0.00105579, -0.19163959,  0.9814648 ,  0.22241211],
                    [ 0.        ,  0.        ,  0.        ,  1.        ]])
 
-# start_configs = robot.arm.FindIKSolutions(start_T, orpy.IkFilterOptions.CheckEnvCollisions)
-# end_configs = robot.arm.FindIKSolutions(goal_T, orpy.IkFilterOptions.CheckEnvCollisions)
-# np.random.shuffle(start_configs)
-# np.random.shuffle(end_configs)
-#cutoff = args.num_configs
-# start_configs = start_configs[:100]
-# end_configs = end_configs[:10]
-
-# count = 0
-# results = []
-# for start_config in start_configs:
-#     for end_config in end_configs:
-#         if count % 200 == 0:
-#             print('Reached iteration {:d}'.format(count))
-#         robot.SetActiveDOFValues(start_config)
-#         result = planners.trajopt_simple_plan(
-#             env,
-#             robot,
-#             end_config,
-#             custom_costs=custom_costs)
-#         results.append(result)
-#         count += 1
-
 start_result = planners.trajopt_simple_plan(
     env,
     robot,
-    c.goal_angles,
+    c.configs[1],
     custom_costs=custom_costs)
-results = planners.modify_traj(env, robot, start_result.GetTraj(), num=999, verbose=True)
+results = planners.modify_traj(env,
+                               robot,
+                               start_result.GetTraj(),
+                               num=args.num_configs,
+                               verbose=True)
 results.append(start_result)
 
 X_pretrain = []
-y_pretrain = []
 for result in results:
     X = result.GetTraj()
-    y = utils.evaluate_costs(robot, X, custom_costs)
-    augmented_X = utils.append_ee_position(robot, X)
+    link_pos = np.stack([
+        utils.get_link_coords(robot, wp).reshape(1, -1).squeeze()
+        for wp in X])
+    augmented_X = np.concatenate([X, link_pos], axis=1)
     X_pretrain.append(augmented_X)
     X_pretrain.append(augmented_X[::-1])
-    y_pretrain.append(y)
-    y_pretrain.append(y)
 X_pretrain = np.stack(X_pretrain)
-y_pretrain = np.array(y_pretrain)
-data = (X_pretrain, y_pretrain)
+data = X_pretrain
 
 with open(args.out_path, 'wb') as f:
     pickle.dump(data, f)

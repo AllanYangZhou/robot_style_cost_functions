@@ -57,6 +57,14 @@ def get_ee_transform(robot, dofs):
     robot.SetActiveDOFValues(current_dofs)
     return values
 
+def get_link_coords(robot, dofs):
+    current_dofs = robot.GetActiveDOFValues()
+    robot.SetActiveDOFValues(dofs)
+    vals = np.stack([link.GetTransform()[:3,-1]
+                     for link in robot.GetLinks()[:8]])
+    robot.SetActiveDOFValues(current_dofs)
+    return vals
+
 
 def get_ee_coords(robot, dofs):
     return get_ee_transform(robot, dofs)[:3,-1]

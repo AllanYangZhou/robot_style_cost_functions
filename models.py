@@ -34,7 +34,7 @@ class CostFunction:
         batch_size = tf.shape(self.trajA_ph)[0]
         input_dim = num_dofs if per_waypoint else num_dofs * num_wps
         self.mlp = MLP(input_dim)
-        self.waypoint_cost = self.mlp(self.waypoint_ph)
+        self.waypoint_cost = self.mlp(self.waypoint_ph) if per_waypoint else None
         if per_waypoint:
             A_costs, B_costs = [], []
             for wp in range(num_wps):

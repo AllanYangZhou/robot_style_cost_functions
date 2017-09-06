@@ -55,6 +55,15 @@ configs.append(convert_angles(np.array([
     241.058807373
 ])))
 configs.append(convert_angles(np.array([
+    353.210235596,
+    241.983413696,
+    372.164093018,
+    123.811828613,
+    357.25100708,
+    235.245880127,
+    221.578979492
+])))
+configs.append(convert_angles(np.array([
     253.225967407,
     153.073532104,
     202.243759155,
@@ -71,15 +80,6 @@ configs.append(convert_angles(np.array([
     171.063491821,
     191.364212036,
     222.647033691
-])))
-configs.append(convert_angles(np.array([
-    353.210235596,
-    241.983413696,
-    372.164093018,
-    123.811828613,
-    357.25100708,
-    235.245880127,
-    221.578979492
 ])))
 
 iact_ctrl_path = find_in_workspaces(

@@ -37,7 +37,8 @@ def feature_orientation(robot, x):
 def trajopt_simple_plan(env, robot, goal_config,
                         num_steps=10, custom_costs={},
                         init=None, custom_traj_costs={},
-                        request_callbacks=[]):
+                        request_callbacks=[],
+                        joint_vel_coeff=1):
     start_joints = robot.GetActiveDOFValues()
     if init is None:
         init = mu.linspace2d(start_joints, goal_config, num_steps)
@@ -50,7 +51,7 @@ def trajopt_simple_plan(env, robot, goal_config,
         'costs' : [
             {
                 'type' : 'joint_vel',
-                'params': {'coeffs' : [1]}
+                'params': {'coeffs' : [joint_vel_coeff]}
             },
             {
                 'type' : 'collision',
@@ -188,6 +189,6 @@ def modify_traj(env, robot, wps, num=1, verbose=False):
         new_results.append(trajopt_simple_plan(
             env,
             robot,
-            c.goal_angles,
+            c.configs[1],
             request_callbacks=rc))
     return new_results
