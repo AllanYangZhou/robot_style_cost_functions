@@ -57,6 +57,7 @@ def get_ee_transform(robot, dofs):
     robot.SetActiveDOFValues(current_dofs)
     return values
 
+
 def get_link_coords(robot, dofs):
     current_dofs = robot.GetActiveDOFValues()
     robot.SetActiveDOFValues(dofs)
@@ -64,6 +65,14 @@ def get_link_coords(robot, dofs):
                      for link in robot.GetLinks()[:8]])
     robot.SetActiveDOFValues(current_dofs)
     return vals
+
+
+def get_ee_orientation(robot, dofs):
+    current_dofs = robot.GetActiveDOFValues()
+    robot.SetActiveDOFValues(dofs)
+    ee_dir = -1 * robot.GetJoints()[6].GetAxis()
+    robot.SetActiveDOFValues(current_dofs)
+    return ee_dir
 
 
 def get_ee_coords(robot, dofs):
@@ -205,14 +214,23 @@ def evaluate_costs(robot, waypoints, custom_costs):
 def append_ee_position(robot, waypoints):
     current_dofs = robot.GetActiveDOFValues()
     ee_positions = []
+    base_pos = robot.GetTransform()[:3,-1]
     for wp in waypoints:
         robot.SetActiveDOFValues(wp)
-        ee_pos = robot.arm.GetEndEffectorTransform()[:3,-1]
-        base_pos = robot.GetTransform()[:3,-1]
-        ee_positions.append(ee_pos - base_pos)
+        ee_pos = robot.arm.GetEndEffectorTransform()[:3,-1] - base_pos
+        ee_or = robot.GetJoints()[6].GetAxis()
+        ee_positions.append(np.concatenate([ee_pos, ee_or]))
     ee_positions = np.stack(ee_positions)
     robot.SetActiveDOFValues(current_dofs)
     return np.concatenate([waypoints, ee_positions], axis=1)
+
+
+def world_space_featurizer(robot, waypoints):
+    link_pos = np.stack([
+        get_link_coords(robot, wp).reshape(1, -1).squeeze()
+        for wp in waypoints])
+    ee_or = np.stack([get_ee_orientation(robot, wp) for wp in waypoints])
+    return np.concatenate([link_pos, ee_or], axis=1)
 
 
 def normalize_vec(x):

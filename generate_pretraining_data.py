@@ -49,10 +49,7 @@ results.append(start_result)
 X_pretrain = []
 for result in results:
     X = result.GetTraj()
-    link_pos = np.stack([
-        utils.get_link_coords(robot, wp).reshape(1, -1).squeeze()
-        for wp in X])
-    augmented_X = np.concatenate([X, link_pos], axis=1)
+    augmented_X = np.concatenate([X, utils.world_space_featurizer(robot, X)], axis=1)
     X_pretrain.append(augmented_X)
     X_pretrain.append(augmented_X[::-1])
 X_pretrain = np.stack(X_pretrain)

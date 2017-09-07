@@ -1,5 +1,6 @@
 import tensorflow as tf
 from keras.layers import Dense, Dropout, LeakyReLU
+from keras.layers.convolutional import Conv1D
 from keras.models import Sequential
 from keras import backend as K
 import numpy as np
@@ -8,12 +9,12 @@ import numpy as np
 class MLP:
     def __init__(self, input_dim, h_size=64):
         self.model = Sequential()
-        self.model.add(Dense(h_size, input_dim=input_dim))
-        self.model.add(LeakyReLU())
+        self.model.add(Dense(h_size, input_dim=input_dim, activation='sigmoid'))
+        #self.model.add(LeakyReLU())
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(h_size))
-        self.model.add(LeakyReLU())
+        self.model.add(Dense(h_size, activation='sigmoid'))
+        #self.model.add(LeakyReLU())
 
         self.model.add(Dropout(0.5))
         self.model.add(Dense(1))
@@ -23,7 +24,7 @@ class MLP:
 
 
 class CostFunction:
-    def __init__(self, load_path=None, num_wps=10, num_dofs=10, per_waypoint=False):
+    def __init__(self, load_path=None, num_wps=10, num_dofs=10, per_waypoint=False, h_size=64):
         self.sess = tf.Session()
         self.waypoint_ph = tf.placeholder(tf.float32, shape=[None, num_dofs], name='waypoint_ph')
         self.trajA_ph = tf.placeholder(tf.float32, shape=[None, num_wps, num_dofs], name='trajA_ph')
@@ -33,7 +34,7 @@ class CostFunction:
 
         batch_size = tf.shape(self.trajA_ph)[0]
         input_dim = num_dofs if per_waypoint else num_dofs * num_wps
-        self.mlp = MLP(input_dim)
+        self.mlp = MLP(input_dim, h_size)
         self.waypoint_cost = self.mlp(self.waypoint_ph) if per_waypoint else None
         if per_waypoint:
             A_costs, B_costs = [], []
