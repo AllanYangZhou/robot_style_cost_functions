@@ -38,7 +38,7 @@ def trajopt_simple_plan(env, robot, goal_config,
                         num_steps=10, custom_costs={},
                         init=None, custom_traj_costs={},
                         request_callbacks=[],
-                        joint_vel_coeff=1):
+                        use_joint_vel=True):
     start_joints = robot.GetActiveDOFValues()
     if init is None:
         init = mu.linspace2d(start_joints, goal_config, num_steps)
@@ -49,10 +49,6 @@ def trajopt_simple_plan(env, robot, goal_config,
             'start_fixed' : True
         },
         'costs' : [
-            {
-                'type' : 'joint_vel',
-                'params': {'coeffs' : [joint_vel_coeff]}
-            },
             {
                 'type' : 'collision',
                 'params' : {
@@ -72,6 +68,11 @@ def trajopt_simple_plan(env, robot, goal_config,
             'data': init.tolist()
         }
     }
+    if use_joint_vel:
+        request['costs'].append({
+            'type' : 'joint_vel',
+            'params': {'coeffs' : [1]}
+        })
     [callback(request) for callback in request_callbacks]
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, env)
@@ -90,6 +91,37 @@ def trajopt_simple_plan(env, robot, goal_config,
             cost_name)
     result = trajoptpy.OptimizeProblem(prob)
     return result
+
+
+def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, **args):
+    start_joints = robot.GetActiveDOFValues()
+    linear_init = mu.linspace2d(start_joints, goal_config, num_steps)
+    mid_idx = int(num_steps / 2)
+    default_mid = linear_init[mid_idx]
+    results = []
+    default_res = trajopt_simple_plan(
+        env,
+        robot,
+        goal_config,
+        num_steps=num_steps,
+        **args)
+    results.append(default_res)
+    for i in range(num_inits - 1):
+        new_mid = np.random.multivariate_normal(default_mid, .1*np.eye(7))
+        modified_init = np.concatenate([
+            mu.linspace2d(linear_init[0], new_mid, mid_idx + 1),
+            mu.linspace2d(new_mid, linear_init[-1], num_steps - mid_idx - 1)
+        ], axis=0)
+        res = trajopt_simple_plan(
+            env,
+            robot,
+            goal_config,
+            init=modified_init,
+            num_steps=num_steps,
+            **args)
+        if not np.allclose(default_res.GetTraj(), res.GetTraj()):
+            results.append(res)
+    return results
 
 
 def trajopt_plan_to_config(env, robot, goal_config,
@@ -192,3 +224,4 @@ def modify_traj(env, robot, wps, num=1, verbose=False):
             c.configs[1],
             request_callbacks=rc))
     return new_results
+
