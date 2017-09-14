@@ -283,3 +283,28 @@ def num_diff(f, x, eps=1e-5):
         grad[i] = (yp - ym) / eps
         xp[i] = x[i]
     return grad
+
+class TrainingQueue:
+    def __init__(self, maxsize=200):
+        self.q = []
+        self.maxsize = maxsize
+
+    def sample(self, num=1):
+        if num == 1:
+            idx = np.random.choice(len(self.q))
+            return self.q[idx]
+        else:
+            idcs = np.random.choice(len(self.q), size=num, replace=False)
+            return [self.q[idx] for idx in idcs]
+
+    def add(self, elem):
+        self.q.append(elem)
+        if len(self.q) > self.maxsize:
+            self.q.pop(0)
+
+    def extend(self, arr):
+        for elem in arr:
+            self.add(elem)
+
+    def __len__(self):
+        return len(self.q)
