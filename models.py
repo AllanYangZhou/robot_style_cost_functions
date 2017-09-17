@@ -52,16 +52,6 @@ class CostFunction:
         self.cost_train_op = tf.train.AdamOptimizer().minimize(self.cost_loss)
 
 
-        # self.time_deltas = tf.Variable(10 * [1.0], 'time_deltas')
-        # self.time_reset = tf.assign(self.time_deltas, np.ones(10))
-        # self.world_f_ph = tf.placeholder(tf.float32, [10, 27])
-        # self.time_combined = tf.concat([self.time_deltas[:,None], self.world_f_ph], axis=1)
-        # self.time_loss = self.mlp(tf.reshape(self.time_combined, [1, num_wps * num_dofs]))
-        # self.inequalities = [self.time_deltas[i] for i in range(10)]
-        # self.time_optimizer = tf.contrib.opt.ScipyOptimizerInterface(
-        #     self.time_loss, var_to_bounds={self.time_deltas: (.1, 10.)},
-        #     var_list=[self.time_deltas])
-
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver(var_list=tf.trainable_variables())
         self.sess.run(init_op)
@@ -123,11 +113,3 @@ class CostFunction:
 
     def load_model(self, path):
         self.saver.restore(self.sess, path)
-
-    # def optimize_timing(self, world_features):
-    #     self.sess.run(self.time_reset)
-    #     self.time_optimizer.minimize(session=self.sess, feed_dict={
-    #         self.world_f_ph: world_features,
-    #         K.learning_phase(): False
-    #     })
-    #     return self.sess.run(self.time_deltas)

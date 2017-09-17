@@ -308,3 +308,14 @@ class TrainingQueue:
 
     def __len__(self):
         return len(self.q)
+
+
+def naive_time_opt(robot, cf, waypoints, return_costs=False):
+    with env:
+        wf = world_space_featurizer(robot, waypoints)
+    test_inputs = []
+    for i in range(0, 30):
+        times = .1 * i * np.ones((10, 1))
+        test_inputs.append(np.concatenate([times, wf], axis=1))
+    costs = cf.cost_traj_batch(np.stack(test_inputs))
+    return costs if return_costs else np.argmin(costs)
