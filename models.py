@@ -5,25 +5,29 @@ from keras.models import Sequential
 from keras import backend as K
 import numpy as np
 
+import utils
+
 
 class MLP:
     def __init__(self, input_dim, h_size=64):
         self.model = Sequential()
-        self.model.add(Dense(h_size, input_dim=input_dim, activation='sigmoid'))
+        self.model.add(Dense(h_size, input_dim=input_dim, activation='tanh'))
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(h_size, activation='sigmoid'))
+        self.model.add(Dense(h_size, activation='tanh'))
 
         self.model.add(Dropout(0.5))
         self.model.add(Dense(1))
+
 
     def __call__(self, x):
         return self.model(x)
 
 
 class CostFunction:
-    def __init__(self, load_path=None, num_wps=10, num_dofs=10, h_size=64, add_total_time=False):
-        self.add_total_time = add_total_time
+    def __init__(self, robot, load_path=None, num_wps=10, num_dofs=10, h_size=64):
+        self.robot = robot
+        self.env = robot.GetEnv()
         self.sess = tf.Session()
         self.trajA_ph = tf.placeholder(tf.float32, shape=[None, num_wps, num_dofs], name='trajA_ph')
         self.trajB_ph = tf.placeholder(tf.float32, shape=[None, num_wps, num_dofs], name='trajB_ph')
@@ -32,14 +36,9 @@ class CostFunction:
 
         batch_size = tf.shape(self.trajA_ph)[0]
         input_dim = num_dofs * num_wps
-        self.mlp = MLP(input_dim + int(add_total_time), h_size)
+        self.mlp = MLP(input_dim, h_size)
         trajA = tf.reshape(self.trajA_ph, [batch_size, input_dim])
         trajB = tf.reshape(self.trajB_ph, [batch_size, input_dim])
-        if add_total_time:
-            self.trajA_time_ph = tf.placeholder(tf.float32, shape=[None, 1], name='trajA_time_ph')
-            self.trajB_time_ph = tf.placeholder(tf.float32, shape=[None, 1], name='trajB_time_ph')
-            trajA = tf.concat([trajA, self.trajA_time_ph], axis=1)
-            trajB = tf.concat([trajB, self.trajB_time_ph], axis=1)
         self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
 
         # Probability proportional to e^{-cost}
@@ -59,6 +58,7 @@ class CostFunction:
             self.load_model(load_path)
         self.num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
 
+
     def cost_traj(self, waypoints):
         '''Returns cost for a single trajectory with shape (num_wps, 7).'''
         cost = self.sess.run(self.costA, feed_dict={
@@ -66,6 +66,7 @@ class CostFunction:
             K.learning_phase(): False
         })
         return np.squeeze(cost)
+
 
     def cost_traj_batch(self, trajs):
         '''Returns cost for a batch of trajs with shape (num_trajs, num_wps, 7).'''
@@ -75,9 +76,11 @@ class CostFunction:
         })
         return np.squeeze(cost)
 
+
     def corrcoef(self, test_data, labels):
         '''Correlation between model predictions and labels.'''
         return np.corrcoef(self.cost_traj_batch(test_data), labels)[0,1]
+
 
     def train(self, trajsA, trajsB, labels, total_time=(1,1)):
         fd = {
@@ -86,11 +89,9 @@ class CostFunction:
             self.label_ph: labels,
             K.learning_phase(): True
         }
-        if self.add_total_time:
-            fd[self.trajA_time_ph] = total_time[0]
-            fd[self.trajB_time_ph] = total_time[1]
         loss, _ = self.sess.run([self.loss, self.train_op], feed_dict=fd)
         return loss
+
 
     def pretrain_on_prior_cost(self, trajs, cost_labels):
         cost_loss, _ = self.sess.run([self.cost_loss, self.cost_train_op], feed_dict={
@@ -100,6 +101,7 @@ class CostFunction:
         })
         return cost_loss
 
+
     def get_cost_loss(self, trajs, cost_labels):
         cost_loss = self.sess.run(self.cost_loss, feed_dict={
             self.trajA_ph: trajs,
@@ -108,8 +110,31 @@ class CostFunction:
         })
         return cost_loss
 
+
     def save_model(self, path):
         save_path = self.saver.save(self.sess, path)
 
+
     def load_model(self, path):
         self.saver.restore(self.sess, path)
+
+
+    def naive_time_opt(self, waypoints, return_costs=False):
+        with self.env:
+            wf = utils.world_space_featurizer(self.robot, waypoints)
+        test_inputs = []
+        for i in range(0, 30):
+            times = .1 * i * np.ones((10, 1))
+            test_inputs.append(np.concatenate([times, wf], axis=1))
+        costs = self.cost_traj_batch(np.stack(test_inputs))
+        return costs if return_costs else np.argmin(costs)
+
+    def get_trajopt_cost(self):
+        def cf_cost(x):
+            x = x.reshape((10,7))
+            f = utils.world_space_featurizer(robot, x)
+            f = np.concatenate([np.ones((10,1)), f], axis=1)
+            score = self.cost_traj(f)
+            return score
+        return cf_cost
+

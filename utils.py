@@ -260,6 +260,7 @@ def plot_waypoints(env, robot, waypoints, size=12, color='#ff3300'):
     ee_coords = np.stack([get_ee_coords(robot, wp) for wp in waypoints])
     return env.plot3(ee_coords, size, color_arr)
 
+
 def num_hess(f, x, eps=1e-5):
     xp = x.copy()
     hess = np.zeros(x.shape[0])
@@ -271,6 +272,7 @@ def num_hess(f, x, eps=1e-5):
         hess[i] = (yp + ym - 2*y) / ((eps * eps) / 4)
         xp[i] = x[i]
     return hess
+
 
 def num_diff(f, x, eps=1e-5):
     xp = x.copy()
@@ -284,10 +286,12 @@ def num_diff(f, x, eps=1e-5):
         xp[i] = x[i]
     return grad
 
+
 class TrainingQueue:
     def __init__(self, maxsize=200):
         self.q = []
         self.maxsize = maxsize
+
 
     def sample(self, num=1):
         if num == 1:
@@ -297,25 +301,48 @@ class TrainingQueue:
             idcs = np.random.choice(len(self.q), size=num, replace=False)
             return [self.q[idx] for idx in idcs]
 
+
     def add(self, elem):
         self.q.append(elem)
         if len(self.q) > self.maxsize:
             self.q.pop(0)
 
+
     def extend(self, arr):
         for elem in arr:
             self.add(elem)
+
 
     def __len__(self):
         return len(self.q)
 
 
-def naive_time_opt(robot, cf, waypoints, return_costs=False):
-    with env:
-        wf = world_space_featurizer(robot, waypoints)
-    test_inputs = []
-    for i in range(0, 30):
-        times = .1 * i * np.ones((10, 1))
-        test_inputs.append(np.concatenate([times, wf], axis=1))
-    costs = cf.cost_traj_batch(np.stack(test_inputs))
-    return costs if return_costs else np.argmin(costs)
+def synthetic_label_func(synthetic_cost):
+    def label_func(xA, xB):
+        cA = synthetic_cost(xA)
+        cB = synthetic_cost(xB)
+        label = cB < cA
+        if np.abs(cA-cB) < .1:
+            label = None
+        return label
+    return label_func
+
+
+def get_labels(cf, data_q, training_q, label_func, num_samples=100, time_ratio=0.2):
+    i = 0
+    while i < num_samples:
+        if np.random.uniform(low=0, high=1) < (1. - time_ratio):
+            xs = data_q.sample(num=2)
+            xA, xB = xs[0], xs[1]
+        else:
+            xs = data_q.sample(num=1)
+            xA = xs.copy()
+            xB = xs.copy()
+            mean = cf.naive_time_opt(xs[:,:7])
+            diff = np.random.normal(0, 1)
+            xA[:,7] = ((mean + diff) / 10.) * np.ones(10)
+            xB[:,7] = ((mean - diff) / 10.) * np.ones(10)
+        data = (xA, xB, label_func(xA, xB))
+        if data[2] is not None:
+            training_q.add(data)
+            i += 1
