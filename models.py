@@ -1,5 +1,6 @@
 import tensorflow as tf
-from keras.layers import Dense, Dropout, LeakyReLU
+from keras.layers import Dense, Dropout
+from keras.layers.recurrent import LSTM
 from keras.layers.convolutional import Conv1D
 from keras.models import Sequential
 from keras import backend as K
@@ -13,10 +14,24 @@ class MLP:
         self.model = Sequential()
         self.model.add(Dense(h_size, input_dim=input_dim, activation='tanh'))
 
-        self.model.add(Dropout(0.5))
+        self.model.add(Dropout(0.2))
         self.model.add(Dense(h_size, activation='tanh'))
 
-        self.model.add(Dropout(0.5))
+        self.model.add(Dropout(0.2))
+        self.model.add(Dense(1))
+
+
+    def __call__(self, x):
+        return self.model(x)
+
+
+class Recurrent:
+    def __init__(self, input_dim, h_size=64):
+        self.model = Sequential()
+        self.model.add(LSTM(h_size, input_shape=(10, input_dim), dropout=0.5, return_sequences=True))
+
+        self.model.add(LSTM(h_size, dropout=0.5, return_sequences=False))
+
         self.model.add(Dense(1))
 
 
@@ -25,7 +40,7 @@ class MLP:
 
 
 class CostFunction:
-    def __init__(self, robot, load_path=None, num_wps=10, num_dofs=10, h_size=64):
+    def __init__(self, robot, load_path=None, num_wps=10, num_dofs=10, h_size=64, recurrent=False):
         self.robot = robot
         self.env = robot.GetEnv()
         self.sess = tf.Session()
@@ -35,10 +50,10 @@ class CostFunction:
         self.cost_label_ph = tf.placeholder(tf.float32, shape=[None], name='cost_label_ph')
 
         batch_size = tf.shape(self.trajA_ph)[0]
-        input_dim = num_dofs * num_wps
-        self.mlp = MLP(input_dim, h_size)
-        trajA = tf.reshape(self.trajA_ph, [batch_size, input_dim])
-        trajB = tf.reshape(self.trajB_ph, [batch_size, input_dim])
+        input_dim = num_dofs if recurrent else num_dofs * num_wps
+        self.mlp = Recurrent(input_dim, h_size) if recurrent else MLP(input_dim, h_size)
+        trajA = self.trajA_ph if recurrent else tf.reshape(self.trajA_ph, [batch_size, input_dim])
+        trajB = self.trajB_ph if recurrent else tf.reshape(self.trajB_ph, [batch_size, input_dim])
         self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
 
         # Probability proportional to e^{-cost}
@@ -93,7 +108,7 @@ class CostFunction:
         return loss
 
 
-    def pretrain_on_prior_cost(self, trajs, cost_labels):
+    def train_cost(self, trajs, cost_labels):
         cost_loss, _ = self.sess.run([self.cost_loss, self.cost_train_op], feed_dict={
             self.trajA_ph: trajs,
             self.cost_label_ph: cost_labels,
@@ -129,10 +144,11 @@ class CostFunction:
         costs = self.cost_traj_batch(np.stack(test_inputs))
         return costs if return_costs else np.argmin(costs)
 
+
     def get_trajopt_cost(self):
         def cf_cost(x):
             x = x.reshape((10,7))
-            f = utils.world_space_featurizer(robot, x)
+            f = utils.world_space_featurizer(self.robot, x)
             f = np.concatenate([np.ones((10,1)), f], axis=1)
             score = self.cost_traj(f)
             return score
