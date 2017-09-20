@@ -8,7 +8,8 @@ from utils import (
     get_ee_coords,
     get_ee_transform,
     normalize_vec,
-    get_pos_ik_soln)
+    get_pos_ik_soln,
+    world_space_featurizer)
 import trajoptpy
 import trajoptpy.math_utils as mu
 from trajoptpy.check_traj import traj_is_safe
@@ -224,3 +225,12 @@ def modify_traj(env, robot, wps, num=1, verbose=False):
             request_callbacks=rc))
     return new_results
 
+
+def get_trajopt_cost(cf):
+    def cf_cost(x):
+        x = x.reshape((10,7))
+        f = world_space_featurizer(cf.robot, x)
+        #f = np.concatenate([np.ones((10,1)), f], axis=1)
+        score = cf.cost_traj(f)
+        return score
+    return cf_cost

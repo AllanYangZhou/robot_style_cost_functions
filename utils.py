@@ -62,7 +62,7 @@ def get_link_coords(robot, dofs):
     current_dofs = robot.GetActiveDOFValues()
     robot.SetActiveDOFValues(dofs)
     vals = np.stack([link.GetTransform()[:3,-1]
-                     for link in robot.GetLinks()[:8]])
+                     for link in robot.GetLinks()[2:8]])
     robot.SetActiveDOFValues(current_dofs)
     return vals
 
@@ -230,7 +230,12 @@ def world_space_featurizer(robot, waypoints):
         get_link_coords(robot, wp).reshape(1, -1).squeeze()
         for wp in waypoints])
     ee_or = np.stack([get_ee_orientation(robot, wp) for wp in waypoints])
-    return np.concatenate([link_pos, ee_or], axis=1)
+    wf = np.concatenate([link_pos, ee_or], axis=1)
+    # Rescale between -1, 1
+    # wf = np.divide(2 * (wf - c.world_feature_min),
+    #                c.world_frange, where=c.world_frange!=0,
+    #                out=np.zeros(wf.shape)) - 1.
+    return wf
 
 
 def normalize_vec(x):
@@ -318,9 +323,10 @@ class TrainingQueue:
 
 
 def synthetic_label_func(synthetic_cost):
-    def label_func(xA, xB):
-        cA = synthetic_cost(xA)
-        cB = synthetic_cost(xB)
+    def label_func(xA, timeA, xB, timeB):
+        desired_time = (2 * (15 - 1) / 29.) - 1.
+        cA = synthetic_cost(xA) + (timeA - desired_time) ** 2
+        cB = synthetic_cost(xB) + (timeB - desired_time) ** 2
         label = cB < cA
         if np.abs(cA-cB) < .1:
             label = None
@@ -328,22 +334,28 @@ def synthetic_label_func(synthetic_cost):
     return label_func
 
 
-def get_labels(cf, data_q, training_q, label_func, num_samples=100, time_ratio=0.2):
+def get_labels(cf,
+               data_q,
+               training_q,
+               label_func,
+               num_samples=100,
+               time_ratio=0.2,
+               adaptive_timing=True):
     i = 0
     while i < num_samples:
         if np.random.uniform(low=0, high=1) < (1. - time_ratio):
             xs = data_q.sample(num=2)
             xA, xB = xs[0], xs[1]
+            timeA = timeB = 1
+            data = ((xA, timeA), (xB, timeB), label_func(xA, timeA, xB, timeB))
+            if data[2] is not None:
+                training_q.add(data)
         else:
-            xs = data_q.sample(num=1)
-            xA = xs.copy()
-            xB = xs.copy()
-            #mean = cf.naive_time_opt(xs[:,:7])
-            mean = np.random.uniform(low=0, high=30)
-            diff = np.random.normal(0, 1)
-            xA[:,7] = ((mean + diff) / 10.) * np.ones(10)
-            xB[:,7] = ((mean - diff) / 10.) * np.ones(10)
-        data = (xA, xB, label_func(xA, xB))
-        if data[2] is not None:
-            training_q.add(data)
-            i += 1
+            xA = data_q.sample(num=1)
+            opt_time = (2 * (5 - 1) / 29.) - 1.
+            for j in range(1, 31):
+                timeB = (2 * (j - 1) / 29.) - 1
+                if not np.allclose(opt_time, timeB):
+                    data = ((xA, opt_time), (xA, timeB), 0)
+                    training_q.add(data)
+        i += 1
