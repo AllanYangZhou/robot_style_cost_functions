@@ -359,3 +359,21 @@ def get_labels(cf,
                     data = ((xA, opt_time), (xA, timeB), 0)
                     training_q.add(data)
         i += 1
+
+
+def train(cf, tq, epochs=5):
+    for i in range(epochs * len(tq)):
+        (xA, timeA), (xB, timeB), label = tq.sample()
+        tA, tB = xA[:,7:], xB[:,7:]
+        cf.train(tA[None], tB[None], [int(label)], total_time=(timeA, timeB))
+
+
+def add_samples_to_label(robot, to_label, data_q, num=30):
+    env = robot.GetEnv()
+    for i in range(num):
+        xs = data_q.sample(num=2)
+        xA, xB = xs[0], xs[1]
+        with env:
+            trajA = waypoints_to_traj(env, robot, xA[:,:7], 10, None)
+            trajB = waypoints_to_traj(env, robot, xB[:,:7], 10, None)
+        to_label.append((xA, trajA, xB, trajB))

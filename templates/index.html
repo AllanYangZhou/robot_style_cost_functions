@@ -1,0 +1,23 @@
+<html>
+  <head>
+    <title>Experiment</title>
+    <script src="//ajax.googleapis.com/ajax/libs/jquery/1.9.1/jquery.min.js"></script>
+    <script type=text/javascript src="{{ url_for('static', filename='main.js') }}"></script>
+  </head>
+  <body>
+    <h1>Labeling</h1>
+    <h2>{{ num_remaining }} comparisons remaining</h2>
+    <div>
+      <h2>Play each trajectory</h2>
+      <button class="playButton" onclick="playTraj('A')">Play trajectory A</button>
+      <button class="playButton" onclick="playTraj('B')">Play trajectory B</button>
+      <h2>Choose a trajectory</h2>
+      <form action="/submit" method="post">
+	<input type="radio" name="traj_choice" value="A"> Trajectory A<br>
+	<input type="radio" name="traj_choice" value="B"> Trajectory B<br>
+	<input type="radio" name="traj_choice" value="neither"> Can't decide/neither<br>
+	<input type="submit" value="Submit">
+      </form>
+    </div>
+  </body>
+</html>
