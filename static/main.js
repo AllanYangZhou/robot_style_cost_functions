@@ -1,6 +1,6 @@
-var playTraj = function(option) {
+var playTraj = function() {
     $('.playButton').attr('disabled', true);
-    $.get('/play/' + option).success(function() {
+    $.get('/play').success(function() {
 	$('.playButton').attr('disabled', false);
 	console.log('Finished playing trajectory.');
     });

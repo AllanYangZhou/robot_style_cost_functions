@@ -7,11 +7,16 @@ from scipy.interpolate import interp1d
 import matplotlib.pyplot as plt
 
 
-def setup(objects=False, render=True):
-    env, robot = interactpy.initialize(render=render)
+def setup(objects=False, render=True, two_robots=False):
+    env, robot = interactpy.initialize(render=render, two_robots=two_robots)
     robot.SetActiveDOFs(robot.arm.GetArmIndices())
     robot.SetActiveDOFValues(c.configs[0])
     robot.SetDOFValues(c.starting_finger_angles, [7,8,9])
+    if two_robots:
+        robot2 = env.GetRobots()[1]
+        robot2.SetActiveDOFs(robot2.arm.GetArmIndices())
+        robot2.SetActiveDOFValues(c.configs[0])
+        robot2.SetDOFValues(c.starting_finger_angles, [7,8,9])
     table = env.GetKinBody('table')
     mug = env.GetKinBody('mug')
     env.Remove(table)
@@ -28,16 +33,28 @@ def setup(objects=False, render=True):
     env.Load('/usr/local/share/openrave-0.9/data/box1.kinbody.xml')
     box = env.GetKinBody('box1')
     box.SetTransform(c.box_T)
+
+    if two_robots:
+        robot_T = robot.GetTransform()
+        robot_T[2,-1] -= 1.5
+        robot2.SetTransform(robot_T)
+        box_T = box.GetTransform()
+        box_T[2,-1] -= 1.5
+        box2 = clone_kinbody(box)
+        box2.SetTransform(box_T)
+        robot2.Grab(box2)
     robot.Grab(box)
+
     if render:
         viewer = env.GetViewer()
-        viewer.SetCamera(c.camera_T)
+        viewer.SetCamera(c.two_robot_camera_T if two_robots else c.camera_T)
+
     ikmodel3D = (
         orpy.databases.inversekinematics.InverseKinematicsModel(
             robot, iktype=orpy.IkParameterization.Type.Translation3D))
     if not ikmodel3D.load():
         ikmodel3D.autogenerate()
-    return env, robot
+    return (env, robot, robot2) if two_robots else (env, robot)
 
 
 def get_ik_solns(robot, goal_T):
@@ -377,3 +394,11 @@ def add_samples_to_label(robot, to_label, data_q, num=30):
             trajA = waypoints_to_traj(env, robot, xA[:,:7], 10, None)
             trajB = waypoints_to_traj(env, robot, xB[:,:7], 10, None)
         to_label.append((xA, trajA, xB, trajB))
+
+
+def clone_kinbody(kinbody):
+    env = kinbody.GetEnv()
+    newbody = orpy.RaveCreateKinBody(env, kinbody.GetXMLId())
+    newbody.Clone(kinbody, 0)
+    env.AddKinBody(newbody, True)
+    return newbody

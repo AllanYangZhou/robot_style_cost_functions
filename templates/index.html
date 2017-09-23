@@ -5,13 +5,13 @@
     <script type=text/javascript src="{{ url_for('static', filename='main.js') }}"></script>
   </head>
   <body>
-    <h1>Labeling</h1>
-    <h2>{{ num_remaining }} comparisons remaining</h2>
+    {% if num_to_label %}
+    <h2>There are {{ num_to_label }} remaining unlabeled comparisons.</h2>
     <div>
-      <h2>Play each trajectory</h2>
-      <button class="playButton" onclick="playTraj('A')">Play trajectory A</button>
-      <button class="playButton" onclick="playTraj('B')">Play trajectory B</button>
-      <h2>Choose a trajectory</h2>
+      <h3>Play trajectory</h3>
+      <button class="playButton" onclick="playTraj()">Play trajectories</button>
+      <br>
+      <h3>Choose a trajectory</h3>
       <form action="/submit" method="post">
 	<input type="radio" name="traj_choice" value="A"> Trajectory A<br>
 	<input type="radio" name="traj_choice" value="B"> Trajectory B<br>
@@ -19,5 +19,18 @@
 	<input type="submit" value="Submit">
       </form>
     </div>
+    {% else %}
+    <h2>No unlabeled comparisons remaining</h2>
+    <form action="/train" method="post">
+      Train on current data ({{ num_train_pts }})
+      <input type="submit" value="Train">
+    </form>
+    <form action="/generate" method="post">
+      Generate more trajectories:
+      <input type="text" name="num_trajs" value="10">
+      <input type="submit" value="Generate">
+    </form>
+    {% endif %}
+    <hr>
   </body>
 </html>
