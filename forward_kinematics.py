@@ -9,17 +9,12 @@ def openrave_get_fk_params(robot):
         current = robot.GetActiveDOFValues()
         robot.SetActiveDOFValues(np.zeros(7))
         for link in robot.GetLinks()[1:8]:
-            g0s.append(link.GetTransform())
+            g0s.append(tf.constant(link.GetTransform().astype(np.float32)))
         for j in robot.GetJoints()[:7]:
-            axes.append(j.GetAxis())
-            anchors.append(j.GetAnchor())
+            axes.append(tf.constant(j.GetAxis().astype(np.float32)))
+            anchors.append(tf.constant(j.GetAnchor().astype(np.float32)))
         robot.SetActiveDOFValues(current)
-    params = {
-        'g0': g0s,
-        'axis': axes,
-        'anchor': anchors
-    }
-    return params
+    return g0s, axes, anchors
 
 
 def rodrigues(w_hat, theta):
@@ -38,14 +33,14 @@ def top_right(rot, w, v, theta):
     return term1 + term2
 
 
-def forward_kinematics(configs, params):
-    num_links = len(params['axis'])
+def forward_kinematics(configs, g0s, axes, anchors):
+    num_links = len(axes)
     results = []
     g_1 = tf.constant(np.eye(4).astype(np.float32))
     for i in range(num_links):
-        g0 = tf.constant(params['g0'][i].astype(np.float32))
-        w = tf.constant(params['axis'][i].astype(np.float32))
-        q = tf.constant(params['anchor'][i].astype(np.float32))
+        g0 = g0s[i]
+        w = axes[i]
+        q = anchors[i]
         v = -1 * tf.cross(w, q)
         w_hat = tf.convert_to_tensor([[0, -w[2], w[1]],
                                       [w[2], 0, -w[0]],
@@ -57,3 +52,13 @@ def forward_kinematics(configs, params):
         res = tf.matmul(g_1, g0)
         results.append(res)
     return results
+
+
+def forward_kinematics_traj(traj, num_wps, g0s, axes, anchors):
+    wfs = []
+    for i in range(num_wps):
+        res = forward_kinematics(traj[i,:], g0s, axes, anchors)
+        wf = tf.stack([r[:3,-1] for r in res[1:]])
+        wf = tf.reshape(wf, [-1])
+        wfs.append(wf)
+    return tf.stack(wfs)
