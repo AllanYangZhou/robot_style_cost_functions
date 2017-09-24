@@ -154,8 +154,11 @@ class CostFunction:
         return cost_loss
 
 
-    def save_model(self, path):
-        save_path = self.saver.save(self.sess, path)
+    def save_model(self, path, step=None):
+        if step:
+            self.saver.save(self.sess, path, global_step=step)
+        else:
+            self.saver.save(self.sess, path)
 
 
     def load_model(self, path):

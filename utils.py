@@ -402,3 +402,7 @@ def clone_kinbody(kinbody):
     newbody.Clone(kinbody, 0)
     env.AddKinBody(newbody, True)
     return newbody
+
+
+def vel_cost(x):
+    return np.sum(np.square(np.diff(x, axis=0)))

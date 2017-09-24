@@ -1,5 +1,6 @@
 import numpy as np
 from catkin.find_in_workspaces import find_in_workspaces
+import itertools
 
 
 def convert_angles(angles):
@@ -86,6 +87,48 @@ configs.append(convert_angles(np.array([
     191.364212036,
     222.647033691
 ])))
+configs.append(convert_angles(np.array([
+    157.691741943,
+    105.630950928,
+    173.614852905,
+    79.6633911133,
+    163.452987671,
+    252.40512085,
+    167.846038818
+])))
+configs.append(convert_angles(np.array([
+    202.639007568,
+    111.832611084,
+    170.277252197,
+    88.8450317383,
+    163.454544067,
+    239.178985596,
+    167.846176147
+])))
+configs.append(convert_angles(np.array([
+    157.010559082,
+    173.968551636,
+    197.956741333,
+    109.312904358,
+    153.473571777,
+    165.363220215,
+    167.844192505
+])))
+configs.append(convert_angles(np.array([
+    183.63142395,
+    178.446975708,
+    211.959579468,
+    87.1731567383,
+    138.10369873,
+    191.371032715,
+    222.647033691
+])))
+
+start_goal_pairs = []
+for s, g in itertools.permutations(configs, 2):
+    if np.linalg.norm(s - g) > 1.0:
+        start_goal_pairs.append((s, g))
+
 
 iact_ctrl_path = find_in_workspaces(
     project='iact_control',
