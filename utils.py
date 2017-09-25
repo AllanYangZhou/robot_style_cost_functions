@@ -163,13 +163,16 @@ def retime_traj(env, robot, traj_old, f):
     return traj
 
 
-def waypoints_to_traj(env, robot, waypoints, duration, retimer):
+def waypoints_to_traj(env, robot, waypoints, speed, retimer):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
     indices = robot.GetActiveDOFIndices()
     spec.AddDeltaTimeGroup()
     traj.Init(spec)
-    dts = constant_ee_timing(waypoints, robot, duration)
+    distance = np.sum(np.linalg.norm(np.diff(waypoints, axis=0), axis=1))
+    duration = distance / speed
+    print(duration)
+    dts = constant_timing(waypoints, robot, duration)
     for i in range(waypoints.shape[0]):
         wp = np.empty(spec.GetDOF())
         dt = dts[i]
@@ -391,8 +394,8 @@ def add_samples_to_label(robot, to_label, data_q, num=30):
         xs = data_q.sample(num=2)
         xA, xB = xs[0], xs[1]
         with env:
-            trajA = waypoints_to_traj(env, robot, xA[:,:7], 10, None)
-            trajB = waypoints_to_traj(env, robot, xB[:,:7], 10, None)
+            trajA = waypoints_to_traj(env, robot, xA[:,:7], 0.5, None)
+            trajB = waypoints_to_traj(env, robot, xB[:,:7], 0.5, None)
         to_label.append((xA, trajA, xB, trajB))
 
 
@@ -405,4 +408,10 @@ def clone_kinbody(kinbody):
 
 
 def vel_cost(x):
-    return np.sum(np.square(np.diff(x, axis=0)))
+    traj = x[:,:7]
+    return np.sum(np.square(np.diff(traj, axis=0)))
+
+
+def ee_cost(x):
+    ee_pos = x[:,16:19]
+    return np.sum(np.square(np.diff(ee_pos, axis=0)))

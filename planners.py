@@ -94,7 +94,7 @@ def trajopt_simple_plan(env, robot, goal_config,
     return result
 
 
-def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, **args):
+def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn_if_unchanged=False, **args):
     start_joints = robot.GetActiveDOFValues()
     linear_init = mu.linspace2d(start_joints, goal_config, num_steps)
     mid_idx = int(num_steps / 2)
@@ -108,7 +108,7 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, **ar
         **args)
     results.append(default_res)
     for i in range(num_inits - 1):
-        new_mid = np.random.multivariate_normal(default_mid, .1*np.eye(7))
+        new_mid = np.random.multivariate_normal(default_mid, .2*np.eye(7))
         modified_init = np.concatenate([
             mu.linspace2d(linear_init[0], new_mid, mid_idx + 1),
             mu.linspace2d(new_mid, linear_init[-1], num_steps - mid_idx - 1)
@@ -120,6 +120,8 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, **ar
             init=modified_init,
             num_steps=num_steps,
             **args)
+        if warn_if_unchanged and np.allclose(modified_init, res.GetTraj()):
+            print('Warning: unchanged init')
         if not np.allclose(default_res.GetTraj(), res.GetTraj()):
             results.append(res)
     return results

@@ -26,11 +26,16 @@
       <input type="submit" value="Train">
     </form>
     <form action="/generate" method="post">
-      Generate more trajectories:
-      <input type="text" name="num_trajs" value="10">
+      Generate more trajectories (enter num trajs per start/end pair):
+      <input type="text" name="num_trajs" value="5">
       <input type="submit" value="Generate">
     </form>
     {% endif %}
     <hr>
+    <form action="/save" method="post">
+      Save with name:
+      <input type="text" name="save_name">
+      <input type="submit" value="Save">
+    </form>
   </body>
 </html>

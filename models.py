@@ -1,12 +1,14 @@
 import tensorflow as tf
-from keras.layers import Dense, Dropout
+from keras.layers import Dense, Dropout, Flatten
 from keras.layers.recurrent import LSTM
 from keras.layers.convolutional import Conv1D
+from keras.layers.wrappers import TimeDistributed
 from keras.models import Sequential
 from keras import backend as K
 import numpy as np
 
 import utils
+import constants as c
 
 
 class MLP:
@@ -26,15 +28,14 @@ class MLP:
 
 
 class Recurrent:
-    def __init__(self, input_dim, h_size=64):
+    def __init__(self, input_dim):
         self.model = Sequential()
-        self.model.add(LSTM(h_size,
-                            input_shape=(10, input_dim),
-                            dropout=0.5,
-                            return_sequences=True))
+        self.model.add(TimeDistributed(Dense(32, activation='tanh'), input_shape=(10, input_dim)))
+        self.model.add(TimeDistributed(Dropout(0.5)))
 
-        self.model.add(LSTM(h_size, dropout=0.5, return_sequences=False))
+        self.model.add(LSTM(16, dropout=0.5, return_sequences=True))
 
+        self.model.add(Flatten())
         self.model.add(Dense(1))
 
 
@@ -50,7 +51,8 @@ class CostFunction:
                  num_dofs=10,
                  h_size=64,
                  recurrent=False,
-                 use_total_duration=False):
+                 use_total_duration=False,
+                 normalize=False):
         self.use_total_duration = use_total_duration
         self.robot = robot
         self.env = robot.GetEnv()
@@ -61,16 +63,24 @@ class CostFunction:
         self.trajB_ph = tf.placeholder(tf.float32,
                                        shape=[None, num_wps, num_dofs],
                                        name='trajB_ph')
+        if normalize:
+            tf_world_feature_min = tf.constant(c.world_feature_min.astype(np.float32))
+            tf_world_frange = tf.constant(c.world_frange.astype(np.float32))
+            trajA = (2 * (self.trajA_ph - tf_world_feature_min) / (tf_world_frange)) - 1.
+            trajB = (2 * (self.trajB_ph - tf_world_feature_min) / (tf_world_frange)) - 1.
+        else:
+            trajA = self.trajA_ph
+            trajB = self.trajB_ph
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
         self.cost_label_ph = tf.placeholder(tf.float32, shape=[None], name='cost_label_ph')
+        self.gan_label_ph = tf.placeholder(tf.float32, shape=[None], name='gan_label_ph')
 
-        batch_size = tf.shape(self.trajA_ph)[0]
+        batch_size = tf.shape(trajA)[0]
         input_dim = (num_dofs if recurrent else num_dofs * num_wps)
         self.mlp = Recurrent(
-            input_dim + int(use_total_duration),
-            h_size) if recurrent else MLP(input_dim + int(use_total_duration), h_size)
-        trajA = self.trajA_ph if recurrent else tf.reshape(self.trajA_ph, [batch_size, input_dim])
-        trajB = self.trajB_ph if recurrent else tf.reshape(self.trajB_ph, [batch_size, input_dim])
+            input_dim + int(use_total_duration)) if recurrent else MLP(input_dim + int(use_total_duration), h_size)
+        trajA = trajA if recurrent else tf.reshape(trajA, [batch_size, input_dim])
+        trajB = trajB if recurrent else tf.reshape(trajB, [batch_size, input_dim])
         if use_total_duration:
             self.timeA_ph = tf.placeholder(tf.float32, shape=[None, 1])
             self.timeB_ph = tf.placeholder(tf.float32, shape=[None, 1])
@@ -86,6 +96,8 @@ class CostFunction:
         self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
         self.cost_loss = tf.reduce_mean(tf.square(self.costA - self.cost_label_ph))
         self.cost_train_op = tf.train.AdamOptimizer().minimize(self.cost_loss)
+        self.gan_cost_loss = self.gan_label_ph * self.costA
+        self.gan_train_op = tf.train.AdamOptimizer().minimize(self.gan_cost_loss)
 
 
         init_op = tf.global_variables_initializer()
@@ -143,6 +155,14 @@ class CostFunction:
             K.learning_phase(): True
         })
         return cost_loss
+
+
+    def train_gan_cost(self, traj, gan_labels):
+        self.sess.run([self.gan_cost_loss], feed_dict={
+            self.trajA_ph: trajs,
+            self.gan_label_ph: gan_labels,
+            K.learning_phase(): True
+        })
 
 
     def get_cost_loss(self, trajs, cost_labels):

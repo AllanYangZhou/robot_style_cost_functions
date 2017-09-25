@@ -148,3 +148,4 @@ world_feature_max = np.array([ 0.0016 , 0.0016 , 0.2755 , 0.20498866, 0.20500316
                                0.89283564, 0.72109679, 0.72066469, 0.99653801, 0.82002566,
                                0.82076509, 1.09954429, 0.99999519, 0.9999705 , 0.99993069])
 world_frange = world_feature_max - world_feature_min
+world_frange[2] = 1.0 # prevents divide by 0
