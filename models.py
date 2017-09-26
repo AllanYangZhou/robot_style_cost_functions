@@ -12,12 +12,12 @@ import constants as c
 
 
 class MLP:
-    def __init__(self, input_dim, h_size=64):
+    def __init__(self, input_dim):
         self.model = Sequential()
-        self.model.add(Dense(h_size, input_dim=input_dim, activation='tanh'))
+        self.model.add(Dense(32, input_dim=input_dim, activation='tanh'))
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(h_size, activation='tanh'))
+        self.model.add(Dense(16, activation='tanh'))
 
         self.model.add(Dropout(0.5))
         self.model.add(Dense(1))
@@ -49,7 +49,6 @@ class CostFunction:
                  load_path=None,
                  num_wps=10,
                  num_dofs=10,
-                 h_size=64,
                  recurrent=False,
                  use_total_duration=False,
                  normalize=False):
@@ -78,7 +77,7 @@ class CostFunction:
         batch_size = tf.shape(trajA)[0]
         input_dim = (num_dofs if recurrent else num_dofs * num_wps)
         self.mlp = Recurrent(
-            input_dim + int(use_total_duration)) if recurrent else MLP(input_dim + int(use_total_duration), h_size)
+            input_dim + int(use_total_duration)) if recurrent else MLP(input_dim + int(use_total_duration))
         trajA = trajA if recurrent else tf.reshape(trajA, [batch_size, input_dim])
         trajB = trajB if recurrent else tf.reshape(trajB, [batch_size, input_dim])
         if use_total_duration:
