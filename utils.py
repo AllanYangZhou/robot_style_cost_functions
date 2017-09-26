@@ -171,7 +171,6 @@ def waypoints_to_traj(env, robot, waypoints, speed, retimer):
     traj.Init(spec)
     distance = np.sum(np.linalg.norm(np.diff(waypoints, axis=0), axis=1))
     duration = distance / speed
-    print(duration)
     dts = constant_timing(waypoints, robot, duration)
     for i in range(waypoints.shape[0]):
         wp = np.empty(spec.GetDOF())
@@ -382,10 +381,13 @@ def get_labels(cf,
 
 
 def train(cf, tq, epochs=5):
+    loss = []
     for i in range(epochs * len(tq)):
         (xA, timeA), (xB, timeB), label = tq.sample()
         tA, tB = xA[:,7:], xB[:,7:]
-        cf.train(tA[None], tB[None], [int(label)], total_time=(timeA, timeB))
+        l = cf.train(tA[None], tB[None], [int(label)], total_time=(timeA, timeB))
+        loss.append(l)
+    return np.array(loss)
 
 
 def add_samples_to_label(robot, to_label, data_q, num=30):
@@ -415,3 +417,22 @@ def vel_cost(x):
 def ee_cost(x):
     ee_pos = x[:,16:19]
     return np.sum(np.square(np.diff(ee_pos, axis=0)))
+
+
+def random_init_maker(given_init, one_wp=False):
+    start = given_init[0]
+    end = given_init[-1]
+    if one_wp:
+        changed_idx = np.random.choice(range(1,9))
+        original = given_init[changed_idx]
+        new_pt = np.random.multivariate_normal(original, .05*np.eye(7))
+        modified_init = np.concatenate([
+            mu.linspace2d(given_init[0], new_pt, changed_idx + 1),
+            mu.linspace2d(new_pt, given_init[-1], 10 - changed_idx)[1:]
+        ], axis=0)
+    else:
+        modified_init = given_init.copy()
+        modified_init[1:-1] = np.random.multivariate_normal(
+            given_init[1:-1].reshape(-1),
+            np.linalg.norm(start - goal) * 0.0025 * np.eye(56)).reshape(8,-1)
+    return modified_init

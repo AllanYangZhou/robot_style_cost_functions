@@ -9,6 +9,7 @@ def convert_angles(angles):
     '''
     converted = (np.pi / 180.) * angles
     converted[2] += np.pi #bug in the recording process
+    converted = np.mod(converted, 2 * np.pi)
     return converted
 
 
@@ -124,10 +125,17 @@ configs.append(convert_angles(np.array([
     222.647033691
 ])))
 
+sg_pair_idcs = [
+    (0,1),
+    (1,0),
+    (2,3),
+    (3,2),
+]
 start_goal_pairs = []
-for s, g in itertools.permutations(configs, 2):
-    if np.linalg.norm(s - g) > 1.0:
-        start_goal_pairs.append((s, g))
+for i, j in sg_pair_idcs:
+    start_goal_pairs.append((configs[i], configs[j]))
+# for s, g in itertools.permutations(configs, 2):
+#     start_goal_pairs.append((s, g))
 
 
 iact_ctrl_path = find_in_workspaces(

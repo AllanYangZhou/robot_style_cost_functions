@@ -16,6 +16,7 @@
 	<input type="radio" name="traj_choice" value="A"> Trajectory A<br>
 	<input type="radio" name="traj_choice" value="B"> Trajectory B<br>
 	<input type="radio" name="traj_choice" value="neither"> Can't decide/neither<br>
+	<input type="radio" name="traj_choice" value="skip"> Skip batch<br>
 	<input type="submit" value="Submit">
       </form>
     </div>
@@ -26,14 +27,26 @@
       <input type="submit" value="Train">
     </form>
     <form action="/generate" method="post">
-      Generate more trajectories (enter num trajs per start/end pair):
-      <input type="text" name="num_trajs" value="5">
+      Generate more trajectories:<br>
+      <input type="radio" name="generate_option" value="no_planning"> Without planning<br>
+      <input type="radio" name="generate_option" value="planning"> With planning<br>
       <input type="submit" value="Generate">
     </form>
     {% endif %}
     <hr>
+    <p>Parameters:</p>
+    <ul>
+      <li>Recurrent: {{ opt_recurrent }}</li>
+      <li>Normalized features: {{ opt_recurrent }}</li>
+      <li>Using total duration: {{ opt_total_duration }}</li>
+    </ul>
     <form action="/save" method="post">
-      Save with name:
+      Save model with name:
+      <input type="text" name="save_name">
+      <input type="submit" value="Save">
+    </form>
+    <form action="/save_tq" method="post">
+      Save training queue with name:
       <input type="text" name="save_name">
       <input type="submit" value="Save">
     </form>

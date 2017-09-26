@@ -10,13 +10,23 @@ import time
 import pickle
 import itertools
 import numpy as np
+import trajoptpy.math_utils as mu
+import pickle
 
 app = Flask(__name__)
 
 display_env, display_robot1, display_robot2 = utils.setup(two_robots=True)
 
 env, robot = utils.setup(render=False)
-cf = CostFunction(robot, num_dofs=21, use_total_duration=True)
+opt_normalize = True
+opt_recurrent = True
+opt_total_duration = False
+cf = CostFunction(
+    robot,
+    num_dofs=21,
+    normalize=opt_normalize,
+    recurrent=opt_recurrent,
+    use_total_duration=opt_total_duration)
 custom_cost = {'NN': planners.get_trajopt_cost(cf)}
 
 with open('./data/world_space_trajs.pkl', 'rb') as f:
@@ -42,7 +52,10 @@ to_label = []
 def index():
     return render_template('index.html',
                            num_to_label=len(to_label),
-                           num_train_pts=len(training_q))
+                           num_train_pts=len(training_q),
+                           opt_normalize=opt_normalize,
+                           opt_recurrent=opt_recurrent,
+                           opt_total_duration=opt_total_duration)
 
 
 @app.route('/save/<name>')
@@ -75,6 +88,10 @@ def play_traj():
 @app.route('/submit', methods=['POST'])
 def handle_submission():
     traj_choice = request.form['traj_choice']
+    if traj_choice == 'skip':
+        to_label[:] = []
+        return redirect(url_for('index'))
+
     label = None
     if traj_choice == 'A':
         label = 0
@@ -92,30 +109,49 @@ def handle_submission():
 
 @app.route('/generate', methods=['POST'])
 def generate_trajs():
-    num_trajs = int(request.form['num_trajs'])
+    use_planning = (request.form['generate_option'] == 'planning')
+    temp_to_label = []
     with env:
-        sg_pairs = np.random.choice(c.start_goal_pairs, size=4, replace=False)
-        for i, (start, goal) in enumerate(sg_pairs):
+        sg_pair_idcs = np.random.choice(range(len(c.start_goal_pairs)), size=4, replace=False)
+        for idx in sg_pair_idcs:
+            start, goal = c.start_goal_pairs[idx]
             robot.SetActiveDOFValues(start)
-            results = planners.trajopt_multi_plan(
-                env,
-                robot,
-                goal,
-                custom_traj_costs=custom_cost,
-                num_inits=num_trajs)
             new_data = []
-            for res in results:
-                wps = res.GetTraj()
-                wf = utils.world_space_featurizer(robot, wps)
-                new_data.append(np.concatenate([wps, wf], axis=1))
-            temp_to_label = []
+            if not use_planning:
+                wps = []
+                linear_init = mu.linspace2d(start, goal, 10)
+                wps.append(linear_init)
+                for i in range(3):
+                    modified_init = utils.random_init_maker(linear_init, one_wp=True)
+                    wps.append(modified_init)
+            else:
+                results = planners.trajopt_multi_plan(
+                    env,
+                    robot,
+                    goal,
+                    custom_traj_costs=custom_cost,
+                    num_inits=5)
+                wps = [res.GetTraj() for res in results]
+            for wp in wps:
+                wf = utils.world_space_featurizer(robot, wp)
+                new_data.append(np.concatenate([wp, wf], axis=1))
             for xA, xB in itertools.combinations(new_data, 2):
                 if not np.allclose(xA[:,:7], xB[:,:7]):
-                    trajA = utils.waypoints_to_traj(display_env, display_robot1, xA[:,:7], 0.5, None)
-                    trajB = utils.waypoints_to_traj(display_env, display_robot2, xB[:,:7], 0.5, None)
+                    trajA = utils.waypoints_to_traj(
+                        display_env,
+                        display_robot1,
+                        xA[:,:7],
+                        0.5,
+                        None)
+                    trajB = utils.waypoints_to_traj(
+                        display_env,
+                        display_robot2,
+                        xB[:,:7],
+                        0.5,
+                        None)
                     temp_to_label.append((xA, trajA, xB, trajB))
-            random.shuffle(temp_to_label)
-            to_label.extend(temp_to_label)
+    random.shuffle(temp_to_label)
+    to_label.extend(temp_to_label)
     starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
     robot.SetActiveDOFValues(starting_dofs)
     return redirect(url_for('index'))
@@ -131,4 +167,12 @@ def handle_train():
 def handle_save():
     save_name = request.form['save_name']
     cf.save_model('./saves/' + save_name + '/')
+    return redirect(url_for('index'))
+
+
+@app.route('/save_tq', methods=['POST'])
+def handle_save_tq():
+    save_name = request.form['save_name']
+    with open('./data/' + save_name, 'wb') as f:
+        pickle.dump(training_q, f)
     return redirect(url_for('index'))
