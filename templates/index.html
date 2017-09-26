@@ -32,6 +32,7 @@
       <input type="radio" name="generate_option" value="planning"> With planning<br>
       <input type="submit" value="Generate">
     </form>
+    <button onclick="testModel()">Test current model</button>
     {% endif %}
     <hr>
     <p>Parameters:</p>
@@ -44,6 +45,11 @@
       Save model with name:
       <input type="text" name="save_name">
       <input type="submit" value="Save">
+    </form>
+    <form action="/load" method="post">
+      Load model with name:
+      <input type="text" name="load_name">
+      <input type="submit" value="Load">
     </form>
     <form action="/save_tq" method="post">
       Save training queue with name:

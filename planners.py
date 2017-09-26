@@ -9,7 +9,9 @@ from utils import (
     get_ee_transform,
     normalize_vec,
     get_pos_ik_soln,
-    world_space_featurizer)
+    world_space_featurizer,
+    random_init_maker
+)
 import trajoptpy
 import trajoptpy.math_utils as mu
 from trajoptpy.check_traj import traj_is_safe
@@ -106,7 +108,7 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn
         **args)
     results.append(default_res)
     for i in range(num_inits - 1):
-        modified_init = utils.random_init_maker(linear_init, one_wp=True)
+        modified_init = random_init_maker(linear_init, one_wp=True)
         res = trajopt_simple_plan(
             env,
             robot,

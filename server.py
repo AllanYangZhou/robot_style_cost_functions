@@ -35,15 +35,6 @@ with open('./data/world_space_trajs.pkl', 'rb') as f:
         wf = np.stack([utils.world_space_featurizer(robot, wps) for wps in starter_data])
     starter_data = np.concatenate([starter_data, wf], axis=-1)
 
-with env:
-    default_wps = planners.trajopt_simple_plan(env, robot, c.configs[1])
-    default_traj = utils.waypoints_to_traj(
-        display_env,
-        display_robot1,
-        default_wps.GetTraj(),
-        10,
-        None)
-
 training_q = utils.TrainingQueue(maxsize=2000)
 to_label = []
 
@@ -103,7 +94,8 @@ def handle_submission():
         training_q.add(data)
     if len(to_label):
         starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
-        robot.SetActiveDOFValues(starting_dofs)
+        display_robot1.SetActiveDOFValues(starting_dofs)
+        display_robot2.SetActiveDOFValues(starting_dofs)
     return redirect(url_for('index'))
 
 
@@ -153,7 +145,8 @@ def generate_trajs():
     random.shuffle(temp_to_label)
     to_label.extend(temp_to_label)
     starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
-    robot.SetActiveDOFValues(starting_dofs)
+    display_robot1.SetActiveDOFValues(starting_dofs)
+    display_robot2.SetActiveDOFValues(starting_dofs)
     return redirect(url_for('index'))
 
 
@@ -170,9 +163,46 @@ def handle_save():
     return redirect(url_for('index'))
 
 
+@app.route('/load', methods=['POST'])
+def handle_load():
+    load_name = request.form['load_name']
+    cf.load_model('./saves/' + load_name + '/')
+    return redirect(url_for('index'))
+
+
 @app.route('/save_tq', methods=['POST'])
 def handle_save_tq():
     save_name = request.form['save_name']
     with open('./data/' + save_name, 'wb') as f:
         pickle.dump(training_q, f)
     return redirect(url_for('index'))
+
+
+@app.route('/test_model')
+def handle_test():
+    robot.SetActiveDOFValues(c.configs[0])
+    current = display_robot1.GetActiveDOFValues()
+    display_robot1.SetActiveDOFValues(c.configs[0])
+    display_robot2.SetActiveDOFValues(c.configs[0])
+    with env:
+        result = planners.trajopt_simple_plan(
+            env,
+            robot, c.configs[1],
+            custom_traj_costs=custom_cost)
+        default_result = planners.trajopt_simple_plan(
+            env,
+            robot, c.configs[1])
+        traj = utils.waypoints_to_traj(display_env, display_robot1,
+                                       result.GetTraj(), 0.5, None)
+        default_traj = utils.waypoints_to_traj(display_env,
+                                               display_robot2,
+                                               default_result.GetTraj(),
+                                               0.5, None)
+    display_robot1.GetController().SetPath(traj)
+    display_robot2.GetController().SetPath(default_traj)
+
+    display_robot1.WaitForController(0)
+    display_robot2.WaitForController(0)
+    display_robot1.SetActiveDOFValues(current)
+    display_robot2.SetActiveDOFValues(current)
+    return ''
