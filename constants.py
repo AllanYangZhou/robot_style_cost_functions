@@ -130,6 +130,8 @@ sg_pair_idcs = [
     (1,0),
     (2,3),
     (3,2),
+    (3,5),
+    (5,3)
 ]
 start_goal_pairs = []
 for i, j in sg_pair_idcs:

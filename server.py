@@ -19,7 +19,7 @@ display_env, display_robot1, display_robot2 = utils.setup(two_robots=True)
 
 env, robot = utils.setup(render=False)
 opt_normalize = True
-opt_recurrent = True
+opt_recurrent = False
 opt_total_duration = False
 cf = CostFunction(
     robot,
