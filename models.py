@@ -75,17 +75,30 @@ class CostFunction:
         self.gan_label_ph = tf.placeholder(tf.float32, shape=[None], name='gan_label_ph')
 
         batch_size = tf.shape(trajA)[0]
-        input_dim = (num_dofs if recurrent else num_dofs * num_wps)
-        self.mlp = Recurrent(
-            input_dim + int(use_total_duration)) if recurrent else MLP(input_dim + int(use_total_duration))
-        trajA = trajA if recurrent else tf.reshape(trajA, [batch_size, input_dim])
-        trajB = trajB if recurrent else tf.reshape(trajB, [batch_size, input_dim])
+        if recurrent:
+            self.mlp = Recurrent(
+                num_dofs + int(use_total_duration))
+        else:
+            self.mlp =  MLP(2*num_dofs + 1 + int(use_total_duration))
         if use_total_duration:
             self.timeA_ph = tf.placeholder(tf.float32, shape=[None, 1])
             self.timeB_ph = tf.placeholder(tf.float32, shape=[None, 1])
             trajA = tf.concat([trajA, self.timeA_ph], axis=1)
             trajB = tf.concat([trajB, self.timeB_ph], axis=1)
-        self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
+        if recurrent:
+            self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
+        else:
+            costA, costB = [], []
+            for i in range(num_wps):
+                prev_idx = max(i-1, 0)
+                currA_state = trajA[:,i,:]
+                velA = trajA[:,prev_idx,:] - currA_state
+                currB_state = trajB[:,i,:]
+                velB = trajB[:,prev_idx,:] - currB_state
+                wp_num = tf.fill([batch_size, 1], float(i))
+                costA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
+                costB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
+            self.costA, self.costB = tf.add_n(costA), tf.add_n(costB)
 
         # Probability proportional to e^{-cost}
         cost_logits = -1 * tf.concat([self.costA, self.costB], axis=-1)
