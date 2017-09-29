@@ -124,14 +124,21 @@ configs.append(convert_angles(np.array([
     191.371032715,
     222.647033691
 ])))
+configs.append(np.array([
+    -0.61847021,
+    3.036324,
+    0.31340425,
+    1.66226363,
+    2.67861919,
+    2.88613266,
+    2.92943373
+]))
 
 sg_pair_idcs = [
     (0,1),
     (1,0),
     (2,3),
-    (3,2),
-    (3,5),
-    (5,3)
+    (3,2)
 ]
 start_goal_pairs = []
 for i, j in sg_pair_idcs:

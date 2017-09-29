@@ -423,7 +423,7 @@ def random_init_maker(given_init, one_wp=False):
     start = given_init[0]
     end = given_init[-1]
     if one_wp:
-        changed_idx = np.random.choice(range(1,9))
+        changed_idx = np.random.choice(range(3,7))
         original = given_init[changed_idx]
         new_pt = np.random.multivariate_normal(original, .05*np.eye(7))
         modified_init = np.concatenate([
@@ -434,5 +434,5 @@ def random_init_maker(given_init, one_wp=False):
         modified_init = given_init.copy()
         modified_init[1:-1] = np.random.multivariate_normal(
             given_init[1:-1].reshape(-1),
-            np.linalg.norm(start - goal) * 0.0025 * np.eye(56)).reshape(8,-1)
+            np.linalg.norm(start - end) * 0.0025 * np.eye(56)).reshape(8,-1)
     return modified_init

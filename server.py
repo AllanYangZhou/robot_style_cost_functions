@@ -29,12 +29,6 @@ cf = CostFunction(
     use_total_duration=opt_total_duration)
 custom_cost = {'NN': planners.get_trajopt_cost(cf)}
 
-with open('./data/world_space_trajs.pkl', 'rb') as f:
-    starter_data = pickle.load(f)
-    with env:
-        wf = np.stack([utils.world_space_featurizer(robot, wps) for wps in starter_data])
-    starter_data = np.concatenate([starter_data, wf], axis=-1)
-
 training_q = utils.TrainingQueue(maxsize=2000)
 to_label = []
 

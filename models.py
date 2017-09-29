@@ -12,12 +12,12 @@ import constants as c
 
 
 class MLP:
-    def __init__(self, input_dim):
+    def __init__(self, input_dim, activation='tanh'):
         self.model = Sequential()
-        self.model.add(Dense(32, input_dim=input_dim, activation='tanh'))
+        self.model.add(Dense(32, input_dim=input_dim, activation=activation))
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(16, activation='tanh'))
+        self.model.add(Dense(16, activation=activation))
 
         self.model.add(Dropout(0.5))
         self.model.add(Dense(1))
@@ -79,7 +79,7 @@ class CostFunction:
             self.mlp = Recurrent(
                 num_dofs + int(use_total_duration))
         else:
-            self.mlp =  MLP(2*num_dofs + 1 + int(use_total_duration))
+            self.mlp =  MLP(2*num_dofs + 1 + int(use_total_duration), activation='tanh')
         if use_total_duration:
             self.timeA_ph = tf.placeholder(tf.float32, shape=[None, 1])
             self.timeB_ph = tf.placeholder(tf.float32, shape=[None, 1])
@@ -96,8 +96,8 @@ class CostFunction:
                 currB_state = trajB[:,i,:]
                 velB = trajB[:,prev_idx,:] - currB_state
                 wp_num = tf.fill([batch_size, 1], float(i))
-                costA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
-                costB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
+                costA.append(tf.square(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1))))
+                costB.append(tf.square(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1))))
             self.costA, self.costB = tf.add_n(costA), tf.add_n(costB)
 
         # Probability proportional to e^{-cost}
@@ -170,8 +170,8 @@ class CostFunction:
 
 
     def train_gan_cost(self, traj, gan_labels):
-        self.sess.run([self.gan_cost_loss], feed_dict={
-            self.trajA_ph: trajs,
+        return self.sess.run([self.gan_cost_loss], feed_dict={
+            self.trajA_ph: traj,
             self.gan_label_ph: gan_labels,
             K.learning_phase(): True
         })
@@ -179,7 +179,7 @@ class CostFunction:
 
     def get_cost_loss(self, trajs, cost_labels):
         cost_loss = self.sess.run(self.cost_loss, feed_dict={
-            self.trajA_ph: trajs,
+            self.trajA_ph: traj,
             self.cost_label_ph: cost_labels,
             K.learning_phase(): False
         })
