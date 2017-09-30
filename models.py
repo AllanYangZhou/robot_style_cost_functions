@@ -88,7 +88,7 @@ class CostFunction:
         if recurrent:
             self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
         else:
-            costA, costB = [], []
+            self.wp_costA, self.wp_costB = [], []
             for i in range(num_wps):
                 prev_idx = max(i-1, 0)
                 currA_state = trajA[:,i,:]
@@ -96,9 +96,12 @@ class CostFunction:
                 currB_state = trajB[:,i,:]
                 velB = trajB[:,prev_idx,:] - currB_state
                 wp_num = tf.fill([batch_size, 1], float(i))
-                costA.append(tf.square(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1))))
-                costB.append(tf.square(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1))))
-            self.costA, self.costB = tf.add_n(costA), tf.add_n(costB)
+                self.wp_costA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
+                self.wp_costB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
+            self.wp_costA = tf.stack(self.wp_costA, axis=1)
+            self.wp_costB = tf.stack(self.wp_costB, axis=1)
+            self.costA = tf.reduce_sum(tf.square(self.wp_costA), axis=1)
+            self.costB = tf.reduce_sum(tf.square(self.wp_costB), axis=1)
 
         # Probability proportional to e^{-cost}
         cost_logits = -1 * tf.concat([self.costA, self.costB], axis=-1)
