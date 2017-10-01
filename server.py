@@ -121,8 +121,8 @@ def generate_trajs():
                     custom_traj_costs=custom_cost,
                     joint_vel_coeff=0.1).GetTraj()
             wps = [given]
-            for i in range(4):
-                delta = utils.smooth_perturb()
+            for i in range(3):
+                delta = utils.smooth_perturb(.1)
                 wps.append(given + delta)
             for xA, xB in itertools.combinations(wps, 2):
                 if not np.allclose(xA[:,:7], xB[:,:7]):

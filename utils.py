@@ -435,10 +435,10 @@ for i in range(8):
         A[(i+1)*7:(i+2)*7, i*7:(i+1)*7] = -1 * np.eye(7)
 Ainv = np.linalg.inv(A)
 
-def smooth_perturb():
+def smooth_perturb(var=.05):
     changed_idx = np.random.choice(range(2,6))
     delta_traj = np.zeros((8, 7))
-    new_pt = np.random.multivariate_normal(np.zeros(7), .05*np.eye(7))
+    new_pt = np.random.multivariate_normal(np.zeros(7), var*np.eye(7))
     delta_traj[changed_idx] = new_pt
     delta_prime = Ainv.dot(delta_traj.reshape(56)).reshape(8, 7)
     const = np.linalg.norm(delta_traj[changed_idx]) / np.linalg.norm(delta_prime[changed_idx])
