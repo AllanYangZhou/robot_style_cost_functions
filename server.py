@@ -112,21 +112,18 @@ def generate_trajs():
             start, goal = c.start_goal_pairs[idx]
             robot.SetActiveDOFValues(start)
             if not use_planning:
-                wps = []
-                linear_init = mu.linspace2d(start, goal, 10)
-                wps.append(linear_init)
-                for i in range(3):
-                    modified_init = utils.random_init_maker(linear_init, one_wp=True)
-                    wps.append(modified_init)
+                given = mu.linspace2d(start, goal, 10)
             else:
-                results = planners.trajopt_multi_plan(
+                given = planners.trajopt_simple_plan(
                     env,
                     robot,
                     goal,
                     custom_traj_costs=custom_cost,
-                    num_inits=5,
-                    joint_vel_coeff=0.1)
-                wps = [res.GetTraj() for res in results]
+                    joint_vel_coeff=0.1).GetTraj()
+            wps = [given]
+            for i in range(4):
+                delta = utils.smooth_perturb()
+                wps.append(given + delta)
             for xA, xB in itertools.combinations(wps, 2):
                 if not np.allclose(xA[:,:7], xB[:,:7]):
                     trajA = utils.waypoints_to_traj(

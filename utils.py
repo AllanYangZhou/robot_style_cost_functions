@@ -425,3 +425,24 @@ def random_init_maker(given_init, one_wp=False):
             given_init[1:-1].reshape(-1),
             np.linalg.norm(start - end) * 0.0025 * np.eye(56)).reshape(8,-1)
     return modified_init
+
+
+A = np.zeros((56,56))
+for i in range(8):
+    A[i*7:(i+1)*7, i*7:(i+1)*7] = 2 * np.eye(7)
+    if i < 7:
+        A[i*7:(i+1)*7, (i+1)*7:(i+2)*7] = -1 * np.eye(7)
+        A[(i+1)*7:(i+2)*7, i*7:(i+1)*7] = -1 * np.eye(7)
+Ainv = np.linalg.inv(A)
+
+def smooth_perturb():
+    changed_idx = np.random.choice(range(2,6))
+    delta_traj = np.zeros((8, 7))
+    new_pt = np.random.multivariate_normal(np.zeros(7), .05*np.eye(7))
+    delta_traj[changed_idx] = new_pt
+    delta_prime = Ainv.dot(delta_traj.reshape(56)).reshape(8, 7)
+    const = np.linalg.norm(delta_traj[changed_idx]) / np.linalg.norm(delta_prime[changed_idx])
+    delta_prime = const * delta_prime
+    delta = np.zeros((10, 7))
+    delta[1:-1] = delta_prime
+    return delta
