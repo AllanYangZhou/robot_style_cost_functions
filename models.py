@@ -1,8 +1,7 @@
 import tensorflow as tf
-from keras.layers import Dense, Dropout, Flatten
-from keras.layers.convolutional import Conv1D
-from keras.layers.wrappers import TimeDistributed
+from keras.layers import Dense, Dropout
 from keras.models import Sequential
+from keras import initializers
 from keras import backend as K
 import numpy as np
 

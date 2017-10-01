@@ -41,7 +41,7 @@ def trajopt_simple_plan(env, robot, goal_config,
                         num_steps=10, custom_costs={},
                         init=None, custom_traj_costs={},
                         request_callbacks=[],
-                        use_joint_vel=True):
+                        joint_vel_coeff=1.):
     start_joints = robot.GetActiveDOFValues()
     if init is None:
         init = mu.linspace2d(start_joints, goal_config, num_steps)
@@ -58,6 +58,10 @@ def trajopt_simple_plan(env, robot, goal_config,
                     'coeffs' : [20],
                     'dist_pen' : [0.025]
                 }
+            },
+            {
+                'type' : 'joint_vel',
+                'params': {'coeffs' : [joint_vel_coeff]}
             }
         ],
         'constraints' : [
@@ -71,11 +75,6 @@ def trajopt_simple_plan(env, robot, goal_config,
             'data': init.tolist()
         }
     }
-    if use_joint_vel:
-        request['costs'].append({
-            'type' : 'joint_vel',
-            'params': {'coeffs' : [1]}
-        })
     [callback(request) for callback in request_callbacks]
     s = json.dumps(request)
     prob = trajoptpy.ConstructProblem(s, env)
