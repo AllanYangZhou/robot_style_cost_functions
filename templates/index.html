@@ -5,6 +5,21 @@
     <script type=text/javascript src="{{ url_for('static', filename='main.js') }}"></script>
   </head>
   <body>
+    {% if session_vars['session_name'] is none %}
+    <form action="/name_session" method="post">
+      Before you begin, name a new session or load an existing one:<br>
+      <input type="text" name="session_name"><br>
+      <input type="radio" name="make_or_load" value="make"> New Session<br>
+      <input type="radio" name="make_or_load" value="load"> Load Existing<br>
+      <input type="submit" value="Start">
+    </form>
+    {% else %}
+    <h1>Session: {{ session_vars['session_name'] }}</h1>
+    <p>
+      Human has completed labeling {{ session_vars['human_batch_num'] }} batches.
+      The model has been trained {{ session_vars['cost_train_num'] }} times.
+    </p>
+    <hr>
     {% if num_to_label %}
     <h2>There are {{ num_to_label }} remaining unlabeled comparisons.</h2>
     <div>
@@ -32,24 +47,19 @@
       <input type="radio" name="generate_option" value="planning"> With planning<br>
       <input type="submit" value="Generate">
     </form>
-    <button onclick="testModel()">Test current model</button>
+    Test current model on trajectory:
+    <button onclick="testModel()">Test</button>
     {% endif %}
     <hr>
-    <p>Parameters:</p>
-    <form action="/save" method="post">
-      Save model with name:
-      <input type="text" name="save_name">
-      <input type="submit" value="Save">
-    </form>
     <form action="/load" method="post">
-      Load model with name:
+      Load pretrained model with name:
       <input type="text" name="load_name">
       <input type="submit" value="Load">
     </form>
-    <form action="/save_tq" method="post">
-      Save training queue with name:
-      <input type="text" name="save_name">
+    <form action="/save_session" method="post">
+      Save Session
       <input type="submit" value="Save">
     </form>
+    {% endif %}
   </body>
 </html>

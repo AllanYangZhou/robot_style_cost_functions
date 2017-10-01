@@ -7,7 +7,6 @@ import utils
 
 import random
 import time
-import pickle
 import itertools
 import numpy as np
 import trajoptpy.math_utils as mu
@@ -18,27 +17,42 @@ app = Flask(__name__)
 display_env, display_robot1, display_robot2 = utils.setup(two_robots=True)
 
 env, robot = utils.setup(render=False)
-opt_normalize = False
 cf = CostFunction(
     robot,
     num_dofs=7,
-    normalize=opt_normalize)
+    normalize=True)
 custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
 
-training_q = utils.TrainingQueue(maxsize=2000)
+
 to_label = []
+session_vars = {
+    'session_name': None,
+    'human_batch_num': 0,
+    'cost_train_num': 0,
+    'tq': utils.TrainingQueue(maxsize=2000),
+}
 
 
 @app.route('/')
 def index():
     return render_template('index.html',
                            num_to_label=len(to_label),
-                           num_train_pts=len(training_q))
+                           num_train_pts=len(session_vars['tq']),
+                           session_vars=session_vars)
 
 
-@app.route('/save/<name>')
-def save_cf(name):
-    cf.save_model('./data/saves/{:s}'.format(name))
+@app.route('/name_session', methods=['POST'])
+def handle_name_session():
+    name = request.form['session_name']
+    make_or_load = request.form['make_or_load']
+    session_vars['session_name'] = name
+    if make_or_load == 'load':
+        with open('./data/experiments/' + session_vars['session_name'] + '.pkl', 'rb') as f:
+            old_sess = pickle.load(f)
+        for key in old_sess:
+            session_vars[key] = old_sess[key]
+        cf.load_model('./saves/experiments/' + session_vars['session_name'] + '/')
+    return redirect(url_for('index'))
 
 
 @app.route('/play')
@@ -78,11 +92,13 @@ def handle_submission():
     xA, _, xB, _ = to_label.pop(0)
     if label is not None:
         data = (xA, xB, label)
-        training_q.add(data)
+        session_vars['tq'].add(data)
     if len(to_label):
         starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
         display_robot1.SetActiveDOFValues(starting_dofs)
         display_robot2.SetActiveDOFValues(starting_dofs)
+    else:
+        session_vars['human_batch_num'] += 1
     return redirect(url_for('index'))
 
 
@@ -108,7 +124,8 @@ def generate_trajs():
                     robot,
                     goal,
                     custom_traj_costs=custom_cost,
-                    num_inits=5)
+                    num_inits=5,
+                    joint_vel_coeff=0.1)
                 wps = [res.GetTraj() for res in results]
             for xA, xB in itertools.combinations(wps, 2):
                 if not np.allclose(xA[:,:7], xB[:,:7]):
@@ -135,14 +152,10 @@ def generate_trajs():
 
 @app.route('/train', methods=['POST'])
 def handle_train():
-    utils.train(cf, training_q, epochs=20)
-    return redirect(url_for('index'))
-
-
-@app.route('/save', methods=['POST'])
-def handle_save():
-    save_name = request.form['save_name']
-    cf.save_model('./saves/' + save_name + '/')
+    utils.train(cf, session_vars['tq'], epochs=20)
+    cf.save_model('./saves/experiments/' + session_vars['session_name'] + '/',
+                  step=session_vars['cost_train_num'])
+    session_vars['cost_train_num'] += 1
     return redirect(url_for('index'))
 
 
@@ -153,11 +166,12 @@ def handle_load():
     return redirect(url_for('index'))
 
 
-@app.route('/save_tq', methods=['POST'])
-def handle_save_tq():
-    save_name = request.form['save_name']
-    with open('./data/' + save_name, 'wb') as f:
-        pickle.dump(training_q, f)
+@app.route('/save_session', methods=['POST'])
+def handle_save_session():
+    with open('./data/experiments/' + session_vars['session_name'] + '.pkl', 'wb') as f:
+        pickle.dump(session_vars, f)
+    cf.save_model('./saves/experiments/' + session_vars['session_name'] + '/',
+                  step=session_vars['cost_train_num'])
     return redirect(url_for('index'))
 
 
@@ -171,7 +185,8 @@ def handle_test():
         result = planners.trajopt_simple_plan(
             env,
             robot, c.configs[1],
-            custom_traj_costs=custom_cost)
+            custom_traj_costs=custom_cost,
+            joint_vel_coeff=0.1)
         default_result = planners.trajopt_simple_plan(
             env,
             robot, c.configs[1])
