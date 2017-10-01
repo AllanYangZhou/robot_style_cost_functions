@@ -88,10 +88,18 @@ def trajopt_simple_plan(env, robot, goal_config,
                 '{:s}{:d}'.format(cost_name, t))
     for cost_name in custom_traj_costs:
         cost_fn = custom_traj_costs[cost_name]
-        prob.AddCost(
-            cost_fn,
-            [(t,j) for t in range(num_steps) for j in range(7)],
-            cost_name)
+        if isinstance(cost_fn, tuple):
+            prob.AddErrorCost(
+                cost_fn[0],
+                cost_fn[1],
+                [(t,j) for t in range(num_steps) for j in range(7)],
+                'SQUARED',
+                cost_name)
+        else:
+            prob.AddCost(
+                cost_fn,
+                [(t,j) for t in range(num_steps) for j in range(7)],
+                cost_name)
     result = trajoptpy.OptimizeProblem(prob)
     return result
 
@@ -232,3 +240,14 @@ def get_trajopt_cost(cf):
         score = cf.cost_traj(f)
         return score
     return cf_cost
+
+
+def get_trajopt_error_cost(cf):
+    def cf_cost(x):
+        x = x.reshape((10,7))
+        score = cf.get_mlp_out(x)
+        return score
+    def cf_cost_grad(x):
+        x = x.reshape((10, 7))
+        return cf.get_grad_mlp_out(x)
+    return cf_cost, cf_cost_grad

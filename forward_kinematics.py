@@ -63,11 +63,16 @@ def forward_kinematics(configs, g0s, axes, anchors):
     return results
 
 
-def forward_kinematics_traj(traj, num_wps, g0s, axes, anchors):
-    wfs = []
-    for i in range(num_wps):
-        res = forward_kinematics(traj[i,:], g0s, axes, anchors)
-        wf = tf.stack([r[:3,-1] for r in res[1:]])
-        wf = tf.reshape(wf, [-1])
-        wfs.append(wf)
-    return tf.stack(wfs)
+def augment_traj(traj, g0s, axes, anchors):
+    num_wps = int(traj.shape[1])
+    num_dofs = int(traj.shape[2])
+    reshaped = tf.reshape(traj, [-1, num_dofs])
+    results = forward_kinematics(reshaped, g0s, axes, anchors)
+    augments = []
+    for res in results[1:]:
+        pos = res[:,:3,-1]
+        pos_reshaped = tf.reshape(pos, [-1, num_wps, 3])
+        augments.append(pos_reshaped)
+    augments.append(augments[-2] - augments[-1])
+    augments = tf.concat(augments, axis=-1)
+    return augments

@@ -7,6 +7,7 @@ from keras.models import Sequential
 from keras import backend as K
 import numpy as np
 
+import forward_kinematics
 import utils
 import constants as c
 
@@ -62,14 +63,15 @@ class CostFunction:
         self.trajB_ph = tf.placeholder(tf.float32,
                                        shape=[None, num_wps, num_dofs],
                                        name='trajB_ph')
+        g0s, axes, anchors = forward_kinematics.openrave_get_fk_params(robot)
+        trajA = forward_kinematics.augment_traj(self.trajA_ph, g0s, axes, anchors)
+        trajB = forward_kinematics.augment_traj(self.trajB_ph, g0s, axes, anchors)
         if normalize:
+            raise Exception('Not ready yet!')
             tf_world_feature_min = tf.constant(c.world_feature_min.astype(np.float32))
             tf_world_frange = tf.constant(c.world_frange.astype(np.float32))
-            trajA = (2 * (self.trajA_ph - tf_world_feature_min) / (tf_world_frange)) - 1.
-            trajB = (2 * (self.trajB_ph - tf_world_feature_min) / (tf_world_frange)) - 1.
-        else:
-            trajA = self.trajA_ph
-            trajB = self.trajB_ph
+            trajA = (2 * (trajA - tf_world_feature_min) / (tf_world_frange)) - 1.
+            trajB = (2 * (trajB - tf_world_feature_min) / (tf_world_frange)) - 1.
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
         self.cost_label_ph = tf.placeholder(tf.float32, shape=[None], name='cost_label_ph')
         self.gan_label_ph = tf.placeholder(tf.float32, shape=[None], name='gan_label_ph')
@@ -79,7 +81,7 @@ class CostFunction:
             self.mlp = Recurrent(
                 num_dofs + int(use_total_duration))
         else:
-            self.mlp =  MLP(2*num_dofs + 1 + int(use_total_duration), activation='tanh')
+            self.mlp =  MLP(2*int(trajA.shape[-1]) + 1 + int(use_total_duration), activation='tanh')
         if use_total_duration:
             self.timeA_ph = tf.placeholder(tf.float32, shape=[None, 1])
             self.timeB_ph = tf.placeholder(tf.float32, shape=[None, 1])
@@ -88,7 +90,7 @@ class CostFunction:
         if recurrent:
             self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
         else:
-            self.wp_costA, self.wp_costB = [], []
+            self.mlp_outA, self.mlp_outB = [], []
             for i in range(num_wps):
                 prev_idx = max(i-1, 0)
                 currA_state = trajA[:,i,:]
@@ -96,13 +98,19 @@ class CostFunction:
                 currB_state = trajB[:,i,:]
                 velB = trajB[:,prev_idx,:] - currB_state
                 wp_num = tf.fill([batch_size, 1], float(i))
-                self.wp_costA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
-                self.wp_costB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
-            self.wp_costA = tf.stack(self.wp_costA, axis=1)
-            self.wp_costB = tf.stack(self.wp_costB, axis=1)
-            self.costA = tf.reduce_sum(tf.square(self.wp_costA), axis=1)
-            self.costB = tf.reduce_sum(tf.square(self.wp_costB), axis=1)
+                self.mlp_outA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
+                self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
+            self.mlp_outA = tf.stack(self.mlp_outA, axis=1)
+            self.mlp_outB = tf.stack(self.mlp_outB, axis=1)
+            self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
+            self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
 
+        #self.grad_mlp_outA = tf.gradients(self.mlp_outA[:,0,0], self.trajA_ph)
+        grads = []
+        for i in range(num_wps):
+            grad_i = tf.gradients(self.mlp_outA[:,i,0], self.trajA_ph)[0]
+            grads.append(tf.reshape(grad_i, [num_wps * num_dofs]))
+        self.grad_mlp_outA = tf.stack(grads)
         # Probability proportional to e^{-cost}
         cost_logits = -1 * tf.concat([self.costA, self.costB], axis=-1)
         self.loss = tf.reduce_mean(
@@ -121,6 +129,22 @@ class CostFunction:
         if load_path:
             self.load_model(load_path)
         self.num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
+
+
+    def get_mlp_out(self, waypoints):
+        mlp_out = self.sess.run(self.mlp_outA, feed_dict={
+            self.trajA_ph: waypoints[None],
+            K.learning_phase(): False
+        })
+        return np.squeeze(mlp_out)
+
+
+    def get_grad_mlp_out(self, waypoints):
+        grad = self.sess.run(self.grad_mlp_outA, feed_dict={
+            self.trajA_ph: waypoints[None],
+            K.learning_phase(): False
+        })
+        return np.squeeze(grad)
 
 
     def cost_traj(self, waypoints, total_time=0):
