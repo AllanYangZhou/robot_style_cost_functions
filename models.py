@@ -53,7 +53,6 @@ class CostFunction:
             trajB = (2 * (trajB - tf_world_feature_min) / (tf_world_frange)) - 1.
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
         self.cost_label_ph = tf.placeholder(tf.float32, shape=[None], name='cost_label_ph')
-        self.gan_label_ph = tf.placeholder(tf.float32, shape=[None], name='gan_label_ph')
 
         batch_size = tf.shape(trajA)[0]
         self.mlp =  MLP(2*int(trajA.shape[-1]) + 1, activation=activation)
@@ -86,9 +85,6 @@ class CostFunction:
         self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
         self.cost_loss = tf.reduce_mean(tf.square(self.costA - self.cost_label_ph))
         self.cost_train_op = tf.train.AdamOptimizer().minimize(self.cost_loss)
-        self.gan_cost_loss = self.gan_label_ph * self.costA
-        self.gan_train_op = tf.train.AdamOptimizer().minimize(self.gan_cost_loss)
-
 
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver(var_list=tf.trainable_variables())
@@ -154,14 +150,6 @@ class CostFunction:
             K.learning_phase(): True
         })
         return cost_loss
-
-
-    def train_gan_cost(self, traj, gan_labels):
-        return self.sess.run([self.gan_cost_loss], feed_dict={
-            self.trajA_ph: traj,
-            self.gan_label_ph: gan_labels,
-            K.learning_phase(): True
-        })
 
 
     def get_cost_loss(self, trajs, cost_labels):
