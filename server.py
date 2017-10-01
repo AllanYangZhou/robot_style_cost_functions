@@ -18,16 +18,12 @@ app = Flask(__name__)
 display_env, display_robot1, display_robot2 = utils.setup(two_robots=True)
 
 env, robot = utils.setup(render=False)
-opt_normalize = True
-opt_recurrent = False
-opt_total_duration = False
+opt_normalize = False
 cf = CostFunction(
     robot,
-    num_dofs=21,
-    normalize=opt_normalize,
-    recurrent=opt_recurrent,
-    use_total_duration=opt_total_duration)
-custom_cost = {'NN': planners.get_trajopt_cost(cf)}
+    num_dofs=7,
+    normalize=opt_normalize)
+custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
 
 training_q = utils.TrainingQueue(maxsize=2000)
 to_label = []
@@ -37,10 +33,7 @@ to_label = []
 def index():
     return render_template('index.html',
                            num_to_label=len(to_label),
-                           num_train_pts=len(training_q),
-                           opt_normalize=opt_normalize,
-                           opt_recurrent=opt_recurrent,
-                           opt_total_duration=opt_total_duration)
+                           num_train_pts=len(training_q))
 
 
 @app.route('/save/<name>')
@@ -84,7 +77,7 @@ def handle_submission():
         label = 1
     xA, _, xB, _ = to_label.pop(0)
     if label is not None:
-        data = ((xA, 10), (xB, 10), label)
+        data = (xA, xB, label)
         training_q.add(data)
     if len(to_label):
         starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
@@ -102,7 +95,6 @@ def generate_trajs():
         for idx in sg_pair_idcs:
             start, goal = c.start_goal_pairs[idx]
             robot.SetActiveDOFValues(start)
-            new_data = []
             if not use_planning:
                 wps = []
                 linear_init = mu.linspace2d(start, goal, 10)
@@ -118,21 +110,18 @@ def generate_trajs():
                     custom_traj_costs=custom_cost,
                     num_inits=5)
                 wps = [res.GetTraj() for res in results]
-            for wp in wps:
-                wf = utils.world_space_featurizer(robot, wp)
-                new_data.append(np.concatenate([wp, wf], axis=1))
-            for xA, xB in itertools.combinations(new_data, 2):
+            for xA, xB in itertools.combinations(wps, 2):
                 if not np.allclose(xA[:,:7], xB[:,:7]):
                     trajA = utils.waypoints_to_traj(
                         display_env,
                         display_robot1,
-                        xA[:,:7],
+                        xA,
                         0.5,
                         None)
                     trajB = utils.waypoints_to_traj(
                         display_env,
                         display_robot2,
-                        xB[:,:7],
+                        xB,
                         0.5,
                         None)
                     temp_to_label.append((xA, trajA, xB, trajB))

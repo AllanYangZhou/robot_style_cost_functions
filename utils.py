@@ -250,10 +250,6 @@ def world_space_featurizer(robot, waypoints):
         for wp in waypoints])
     ee_or = np.stack([get_ee_orientation(robot, wp) for wp in waypoints])
     wf = np.concatenate([link_pos, ee_or], axis=1)
-    # Rescale between -1, 1
-    # wf = np.divide(2 * (wf - c.world_feature_min),
-    #                c.world_frange, where=c.world_frange!=0,
-    #                out=np.zeros(wf.shape)) - 1.
     return wf
 
 
@@ -383,9 +379,8 @@ def get_labels(cf,
 def train(cf, tq, epochs=5):
     loss = []
     for i in range(epochs * len(tq)):
-        (xA, timeA), (xB, timeB), label = tq.sample()
-        tA, tB = xA[:,7:], xB[:,7:]
-        l = cf.train(tA[None], tB[None], [int(label)], total_time=(timeA, timeB))
+        xA, xB, label = tq.sample()
+        l = cf.train(xA[None], xB[None], [int(label)])
         loss.append(l)
     return np.array(loss)
 
@@ -409,14 +404,8 @@ def clone_kinbody(kinbody):
     return newbody
 
 
-def vel_cost(x):
-    traj = x[:,:7]
+def vel_cost(traj):
     return np.sum(np.square(np.diff(traj, axis=0)))
-
-
-def ee_cost(x):
-    ee_pos = x[:,16:19]
-    return np.sum(np.square(np.diff(ee_pos, axis=0)))
 
 
 def random_init_maker(given_init, one_wp=False):

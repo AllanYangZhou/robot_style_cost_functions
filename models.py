@@ -1,6 +1,5 @@
 import tensorflow as tf
 from keras.layers import Dense, Dropout, Flatten
-from keras.layers.recurrent import LSTM
 from keras.layers.convolutional import Conv1D
 from keras.layers.wrappers import TimeDistributed
 from keras.models import Sequential
@@ -28,32 +27,14 @@ class MLP:
         return self.model(x)
 
 
-class Recurrent:
-    def __init__(self, input_dim):
-        self.model = Sequential()
-        self.model.add(TimeDistributed(Dense(32, activation='tanh'), input_shape=(10, input_dim)))
-        self.model.add(TimeDistributed(Dropout(0.5)))
-
-        self.model.add(LSTM(16, dropout=0.5, return_sequences=True))
-
-        self.model.add(Flatten())
-        self.model.add(Dense(1))
-
-
-    def __call__(self, x):
-        return self.model(x)
-
-
 class CostFunction:
     def __init__(self,
                  robot,
                  load_path=None,
                  num_wps=10,
-                 num_dofs=10,
-                 recurrent=False,
-                 use_total_duration=False,
-                 normalize=False):
-        self.use_total_duration = use_total_duration
+                 num_dofs=7,
+                 normalize=False,
+                 activation='tanh'):
         self.robot = robot
         self.env = robot.GetEnv()
         self.sess = tf.Session()
@@ -77,33 +58,21 @@ class CostFunction:
         self.gan_label_ph = tf.placeholder(tf.float32, shape=[None], name='gan_label_ph')
 
         batch_size = tf.shape(trajA)[0]
-        if recurrent:
-            self.mlp = Recurrent(
-                num_dofs + int(use_total_duration))
-        else:
-            self.mlp =  MLP(2*int(trajA.shape[-1]) + 1 + int(use_total_duration), activation='tanh')
-        if use_total_duration:
-            self.timeA_ph = tf.placeholder(tf.float32, shape=[None, 1])
-            self.timeB_ph = tf.placeholder(tf.float32, shape=[None, 1])
-            trajA = tf.concat([trajA, self.timeA_ph], axis=1)
-            trajB = tf.concat([trajB, self.timeB_ph], axis=1)
-        if recurrent:
-            self.costA, self.costB = self.mlp(trajA), self.mlp(trajB)
-        else:
-            self.mlp_outA, self.mlp_outB = [], []
-            for i in range(num_wps):
-                prev_idx = max(i-1, 0)
-                currA_state = trajA[:,i,:]
-                velA = trajA[:,prev_idx,:] - currA_state
-                currB_state = trajB[:,i,:]
-                velB = trajB[:,prev_idx,:] - currB_state
-                wp_num = tf.fill([batch_size, 1], float(i))
-                self.mlp_outA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
-                self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
-            self.mlp_outA = tf.stack(self.mlp_outA, axis=1)
-            self.mlp_outB = tf.stack(self.mlp_outB, axis=1)
-            self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
-            self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
+        self.mlp =  MLP(2*int(trajA.shape[-1]) + 1, activation=activation)
+        self.mlp_outA, self.mlp_outB = [], []
+        for i in range(num_wps):
+            prev_idx = max(i-1, 0)
+            currA_state = trajA[:,i,:]
+            velA = trajA[:,prev_idx,:] - currA_state
+            currB_state = trajB[:,i,:]
+            velB = trajB[:,prev_idx,:] - currB_state
+            wp_num = tf.fill([batch_size, 1], float(i))
+            self.mlp_outA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
+            self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
+        self.mlp_outA = tf.stack(self.mlp_outA, axis=1)
+        self.mlp_outB = tf.stack(self.mlp_outB, axis=1)
+        self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
+        self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
 
         #self.grad_mlp_outA = tf.gradients(self.mlp_outA[:,0,0], self.trajA_ph)
         grads = []
@@ -147,15 +116,12 @@ class CostFunction:
         return np.squeeze(grad)
 
 
-    def cost_traj(self, waypoints, total_time=0):
+    def cost_traj(self, waypoints):
         '''Returns cost for a single trajectory with shape (num_wps, 7).'''
-        fd = {
+        cost = self.sess.run(self.costA, feed_dict={
             self.trajA_ph: waypoints[None],
             K.learning_phase(): False
-        }
-        if self.use_total_duration:
-            fd[self.timeA_ph] = [[total_time]]
-        cost = self.sess.run(self.costA, feed_dict=fd)
+        })
         return np.squeeze(cost)
 
 
@@ -173,17 +139,13 @@ class CostFunction:
         return np.corrcoef(self.cost_traj_batch(test_data), labels)[0,1]
 
 
-    def train(self, trajsA, trajsB, labels, total_time=(0,0)):
-        fd = {
+    def train(self, trajsA, trajsB, labels):
+        loss, _ = self.sess.run([self.loss, self.train_op], feed_dict={
             self.trajA_ph: trajsA,
             self.trajB_ph: trajsB,
             self.label_ph: labels,
             K.learning_phase(): True
-        }
-        if self.use_total_duration:
-            fd[self.timeA_ph] = [[total_time[0]]]
-            fd[self.timeB_ph] = [[total_time[1]]]
-        loss, _ = self.sess.run([self.loss, self.train_op], feed_dict=fd)
+        })
         return loss
 
 
@@ -222,16 +184,3 @@ class CostFunction:
 
     def load_model(self, path):
         self.saver.restore(self.sess, path)
-
-
-    def naive_time_opt(self, waypoints, return_costs=False):
-        with self.env:
-            wf = utils.world_space_featurizer(self.robot, waypoints)
-        # test_inputs = []
-        # for i in range(0, 30):
-            # times = .1 * i * np.ones((10, 1))
-            # test_inputs.append(np.concatenate([times, wf], axis=1))
-        # costs = self.cost_traj_batch(np.stack(test_inputs))
-        costs = np.array([self.cost_traj(wf, total_time=(2 * (i-1) / 29.)-1)
-                          for i in range(1, 31)])
-        return costs if return_costs else np.argmin(costs)
