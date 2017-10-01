@@ -13,10 +13,10 @@ import constants as c
 class MLP:
     def __init__(self, input_dim, activation='tanh'):
         self.model = Sequential()
-        self.model.add(Dense(32, input_dim=input_dim, activation=activation))
+        self.model.add(Dense(2*input_dim, input_dim=input_dim, activation=activation))
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(16, activation=activation))
+        self.model.add(Dense(input_dim, activation=activation))
 
         self.model.add(Dropout(0.5))
         self.model.add(Dense(1))
@@ -47,9 +47,8 @@ class CostFunction:
         trajA = forward_kinematics.augment_traj(self.trajA_ph, g0s, axes, anchors)
         trajB = forward_kinematics.augment_traj(self.trajB_ph, g0s, axes, anchors)
         if normalize:
-            raise Exception('Not ready yet!')
-            tf_world_feature_min = tf.constant(c.world_feature_min.astype(np.float32))
-            tf_world_frange = tf.constant(c.world_frange.astype(np.float32))
+            tf_world_feature_min = tf.constant(c.world_feature_min)
+            tf_world_frange = tf.constant(c.world_frange)
             trajA = (2 * (trajA - tf_world_feature_min) / (tf_world_frange)) - 1.
             trajB = (2 * (trajB - tf_world_feature_min) / (tf_world_frange)) - 1.
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
