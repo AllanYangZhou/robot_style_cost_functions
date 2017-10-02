@@ -150,6 +150,7 @@ def generate_trajs():
 
 @app.route('/train', methods=['POST'])
 def handle_train():
+    num_epochs = int(request.form['num_epochs'])
     utils.train(cf, session_vars['tq'], epochs=20)
     cf.save_model('./saves/experiments/' + session_vars['session_name'] + '/',
                   step=session_vars['cost_train_num'])

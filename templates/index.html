@@ -30,15 +30,16 @@
       <form action="/submit" method="post">
 	<input type="radio" name="traj_choice" value="A"> Trajectory A<br>
 	<input type="radio" name="traj_choice" value="B"> Trajectory B<br>
-	<input type="radio" name="traj_choice" value="neither"> Can't decide/neither<br>
-	<input type="radio" name="traj_choice" value="skip"> Skip batch<br>
+	<input type="radio" name="traj_choice" value="neither"> Can't decide<br>
+	<input type="radio" name="traj_choice" value="skip"> Skip remainder of batch<br>
 	<input type="submit" value="Submit">
       </form>
     </div>
     {% else %}
     <h2>No unlabeled comparisons remaining</h2>
     <form action="/train" method="post">
-      Train on current data ({{ num_train_pts }})
+      Train on current data ({{ num_train_pts }}) for this many epochs
+      <input type="text" name="num_epochs" value="10">
       <input type="submit" value="Train">
     </form>
     <form action="/generate" method="post">
