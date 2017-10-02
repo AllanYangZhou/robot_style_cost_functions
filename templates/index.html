@@ -47,8 +47,16 @@
       <input type="radio" name="generate_option" value="planning"> With planning<br>
       <input type="submit" value="Generate">
     </form>
-    Test current model on trajectory:
-    <button onclick="testModel()">Test</button>
+    <form action="/test_model" method="post">
+      Test pair number (0-3)<br>
+      <input type="text" name="test_num" value="0">
+      <input type="submit" value="Test">
+    </form>
+    <form action="/set_joint_vel_coeff" method="post">
+      Change joint velocity regularization:<br>
+      <input type="text" name="joint_vel" value="{{ session_vars['joint_vel_coeff'] }}">
+      <input type="submit" value="Set">
+    </form>
     {% endif %}
     <hr>
     <form action="/load" method="post">

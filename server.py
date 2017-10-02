@@ -30,6 +30,7 @@ session_vars = {
     'human_batch_num': 0,
     'cost_train_num': 0,
     'tq': utils.TrainingQueue(maxsize=2000),
+    'joint_vel_coeff': 1.
 }
 
 
@@ -119,7 +120,7 @@ def generate_trajs():
                     robot,
                     goal,
                     custom_traj_costs=custom_cost,
-                    joint_vel_coeff=0.1).GetTraj()
+                    joint_vel_coeff=session_vars['joint_vel_coeff']).GetTraj()
             wps = [given]
             for i in range(3):
                 delta = utils.smooth_perturb(.1)
@@ -172,21 +173,27 @@ def handle_save_session():
     return redirect(url_for('index'))
 
 
-@app.route('/test_model')
+@app.route('/test_model', methods=['POST'])
 def handle_test():
-    robot.SetActiveDOFValues(c.configs[8])
+    test_num = int(request.form['test_num'])
+    if test_num >= len(c.sg_test_idcs):
+        return ''
+    sidx, gidx = c.sg_test_idcs[test_num]
+    start = c.configs[sidx]
+    goal = c.configs[gidx]
+    robot.SetActiveDOFValues(start)
     current = display_robot1.GetActiveDOFValues()
-    display_robot1.SetActiveDOFValues(c.configs[8])
-    display_robot2.SetActiveDOFValues(c.configs[8])
+    display_robot1.SetActiveDOFValues(start)
+    display_robot2.SetActiveDOFValues(start)
     with env:
         result = planners.trajopt_simple_plan(
             env,
-            robot, c.configs[6],
+            robot, goal,
             custom_traj_costs=custom_cost,
-            joint_vel_coeff=0.1)
+            joint_vel_coeff=session_vars['joint_vel_coeff'])
         default_result = planners.trajopt_simple_plan(
             env,
-            robot, c.configs[6])
+            robot, goal)
         traj = utils.waypoints_to_traj(display_env, display_robot1,
                                        result.GetTraj(), 0.5, None)
         default_traj = utils.waypoints_to_traj(display_env,
@@ -200,4 +207,11 @@ def handle_test():
     display_robot2.WaitForController(0)
     display_robot1.SetActiveDOFValues(current)
     display_robot2.SetActiveDOFValues(current)
-    return ''
+    return redirect(url_for('index'))
+
+
+@app.route('/set_joint_vel_coeff', methods=['POST'])
+def handle_set_joint_vel_coeff():
+    joint_vel_coeff = float(request.form['joint_vel'])
+    session_vars['joint_vel_coeff'] = joint_vel_coeff
+    return redirect(url_for('index'))

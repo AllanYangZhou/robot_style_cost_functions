@@ -143,14 +143,14 @@ sg_pair_idcs = [
 
 sg_test_idcs = [
     (6,8),
-    (8,6)
+    (8,6),
+    (7,8),
+    (8,7)
 ]
 
 start_goal_pairs = []
 for i, j in sg_pair_idcs:
     start_goal_pairs.append((configs[i], configs[j]))
-# for s, g in itertools.permutations(configs, 2):
-#     start_goal_pairs.append((s, g))
 
 
 iact_ctrl_path = find_in_workspaces(

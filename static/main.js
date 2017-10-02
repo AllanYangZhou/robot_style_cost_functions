@@ -5,7 +5,3 @@ var playTraj = function() {
 	console.log('Finished playing trajectory.');
     });
 };
-
-var testModel = function() {
-    $.get('/test_model');
-};
