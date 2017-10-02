@@ -140,6 +140,12 @@ sg_pair_idcs = [
     (2,3),
     (3,2)
 ]
+
+sg_test_idcs = [
+    (6,8),
+    (8,6)
+]
+
 start_goal_pairs = []
 for i, j in sg_pair_idcs:
     start_goal_pairs.append((configs[i], configs[j]))

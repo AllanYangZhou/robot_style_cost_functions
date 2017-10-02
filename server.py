@@ -174,19 +174,19 @@ def handle_save_session():
 
 @app.route('/test_model')
 def handle_test():
-    robot.SetActiveDOFValues(c.configs[0])
+    robot.SetActiveDOFValues(c.configs[8])
     current = display_robot1.GetActiveDOFValues()
-    display_robot1.SetActiveDOFValues(c.configs[0])
-    display_robot2.SetActiveDOFValues(c.configs[0])
+    display_robot1.SetActiveDOFValues(c.configs[8])
+    display_robot2.SetActiveDOFValues(c.configs[8])
     with env:
         result = planners.trajopt_simple_plan(
             env,
-            robot, c.configs[1],
+            robot, c.configs[6],
             custom_traj_costs=custom_cost,
             joint_vel_coeff=0.1)
         default_result = planners.trajopt_simple_plan(
             env,
-            robot, c.configs[1])
+            robot, c.configs[6])
         traj = utils.waypoints_to_traj(display_env, display_robot1,
                                        result.GetTraj(), 0.5, None)
         default_traj = utils.waypoints_to_traj(display_env,
