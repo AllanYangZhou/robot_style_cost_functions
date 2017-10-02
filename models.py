@@ -10,6 +10,22 @@ import utils
 import constants as c
 
 
+def jacobian(y_flat, x):
+    n = y_flat.shape[0]
+
+    loop_vars = [
+        tf.constant(0, tf.int32),
+        tf.TensorArray(tf.float32, size=n),
+    ]
+
+    _, jacobian = tf.while_loop(
+        lambda j, _: j < n,
+        lambda j, result: (j+1, result.write(j, tf.gradients(y_flat[j], x))),
+        loop_vars)
+
+    return jacobian.stack()
+
+
 class MLP:
     def __init__(self, input_dim, activation='tanh'):
         self.model = Sequential()
@@ -19,7 +35,7 @@ class MLP:
         self.model.add(Dense(input_dim, activation=activation))
 
         self.model.add(Dropout(0.5))
-        self.model.add(Dense(1))
+        self.model.add(Dense(input_dim))
 
 
     def __call__(self, x):
@@ -55,7 +71,8 @@ class CostFunction:
         self.cost_label_ph = tf.placeholder(tf.float32, shape=[None], name='cost_label_ph')
 
         batch_size = tf.shape(trajA)[0]
-        self.mlp =  MLP(2*int(trajA.shape[-1]) + 1, activation=activation)
+        input_dim = 2*int(trajA.shape[-1]) + 1
+        self.mlp =  MLP(input_dim, activation=activation)
         self.mlp_outA, self.mlp_outB = [], []
         for i in range(num_wps):
             prev_idx = max(i-1, 0)
@@ -66,19 +83,17 @@ class CostFunction:
             wp_num = tf.fill([batch_size, 1], float(i))
             self.mlp_outA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
             self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
-        self.mlp_outA = tf.stack(self.mlp_outA, axis=1)
-        self.mlp_outB = tf.stack(self.mlp_outB, axis=1)
+        self.mlp_outA = tf.concat(self.mlp_outA, axis=1)
+        self.mlp_outB = tf.concat(self.mlp_outB, axis=1)
         self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
         self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
 
-        #self.grad_mlp_outA = tf.gradients(self.mlp_outA[:,0,0], self.trajA_ph)
-        grads = []
-        for i in range(num_wps):
-            grad_i = tf.gradients(self.mlp_outA[:,i,0], self.trajA_ph)[0]
-            grads.append(tf.reshape(grad_i, [num_wps * num_dofs]))
-        self.grad_mlp_outA = tf.stack(grads)
+        # WARNING: Only the Jacobian for the first trajectory in the batch.
+        self.grad_mlp_outA = tf.reshape(
+            jacobian(self.mlp_outA[0], self.trajA_ph),
+            [input_dim*num_wps, -1])
         # Probability proportional to e^{-cost}
-        cost_logits = -1 * tf.concat([self.costA, self.costB], axis=-1)
+        cost_logits = -1 * tf.stack([self.costA, self.costB], axis=1)
         self.loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=cost_logits, labels=self.label_ph))
