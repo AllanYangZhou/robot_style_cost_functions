@@ -53,9 +53,10 @@
       <input type="text" name="test_num" value="0">
       <input type="submit" value="Test">
     </form>
-    <form action="/set_joint_vel_coeff" method="post">
+    <form action="/set_params" method="post">
       Change joint velocity regularization:<br>
       <input type="text" name="joint_vel" value="{{ session_vars['joint_vel_coeff'] }}">
+      <input type="text" name="speed" value="{{ session_vars['speed'] }}">
       <input type="submit" value="Set">
     </form>
     {% endif %}

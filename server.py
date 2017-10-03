@@ -30,7 +30,8 @@ session_vars = {
     'human_batch_num': 0,
     'cost_train_num': 0,
     'tq': utils.TrainingQueue(maxsize=2000),
-    'joint_vel_coeff': 1.
+    'joint_vel_coeff': 1.,
+    'speed': 0.5
 }
 
 
@@ -131,13 +132,13 @@ def generate_trajs():
                         display_env,
                         display_robot1,
                         xA,
-                        0.5,
+                        session_vars['speed'],
                         None)
                     trajB = utils.waypoints_to_traj(
                         display_env,
                         display_robot2,
                         xB,
-                        0.5,
+                        session_vars['speed'],
                         None)
                     temp_to_label.append((xA, trajA, xB, trajB))
     random.shuffle(temp_to_label)
@@ -196,7 +197,7 @@ def handle_test():
             env,
             robot, goal)
         traj = utils.waypoints_to_traj(display_env, display_robot1,
-                                       result.GetTraj(), 0.5, None)
+                                       result.GetTraj(), session_vars['speed'], None)
         default_traj = utils.waypoints_to_traj(display_env,
                                                display_robot2,
                                                default_result.GetTraj(),
@@ -211,8 +212,9 @@ def handle_test():
     return redirect(url_for('index'))
 
 
-@app.route('/set_joint_vel_coeff', methods=['POST'])
+@app.route('/set_params', methods=['POST'])
 def handle_set_joint_vel_coeff():
     joint_vel_coeff = float(request.form['joint_vel'])
+    session_vars['speed'] = float(request.form['speed'])
     session_vars['joint_vel_coeff'] = joint_vel_coeff
     return redirect(url_for('index'))
