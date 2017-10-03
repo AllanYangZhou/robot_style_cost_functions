@@ -47,13 +47,13 @@ def index():
 def handle_name_session():
     name = request.form['session_name']
     make_or_load = request.form['make_or_load']
-    session_vars['session_name'] = name
     if make_or_load == 'load':
-        with open('./data/experiments/' + session_vars['session_name'] + '.pkl', 'rb') as f:
+        with open('./data/experiments/' + name + '.pkl', 'rb') as f:
             old_sess = pickle.load(f)
         for key in old_sess:
             session_vars[key] = old_sess[key]
-        cf.load_model('./saves/experiments/' + session_vars['session_name'] + '/')
+        cf.load_model('./saves/experiments/' + name + '/')
+    session_vars['session_name'] = name
     return redirect(url_for('index'))
 
 
