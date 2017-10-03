@@ -31,7 +31,8 @@ session_vars = {
     'cost_train_num': 0,
     'tq': utils.TrainingQueue(maxsize=2000),
     'joint_vel_coeff': 1.,
-    'speed': 0.5
+    'speed': 0.5,
+    'plots': None
 }
 
 
@@ -76,6 +77,19 @@ def play_traj():
     display_robot1.SetActiveDOFValues(starting_dofs)
     display_robot2.SetActiveDOFValues(starting_dofs)
 
+    return ''
+
+@app.route('/plot')
+def handle_plot():
+    if session_vars['plots'] is None:
+        p1 = utils.plot_waypoints(display_env, display_robot1, to_label[0][0])
+        p2 = utils.plot_waypoints(display_env, display_robot2, to_label[0][2])
+        session_vars['plots'] = (p1, p2)
+    else:
+        p1, p2 = session_vars['plots']
+        p1.Close()
+        p2.Close()
+        session_vars['plots'] = None
     return ''
 
 
