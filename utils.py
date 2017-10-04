@@ -163,13 +163,19 @@ def retime_traj(env, robot, traj_old, f):
     return traj
 
 
-def waypoints_to_traj(env, robot, waypoints, speed, retimer):
+def waypoints_to_traj(env, robot, waypoints, speed, retimer, use_ee_dist=False):
     traj = orpy.RaveCreateTrajectory(env, '')
     spec = robot.GetActiveConfigurationSpecification('linear')
     indices = robot.GetActiveDOFIndices()
     spec.AddDeltaTimeGroup()
     traj.Init(spec)
-    distance = np.sum(np.linalg.norm(np.diff(waypoints, axis=0), axis=1))
+    if use_ee_dist:
+        ee_positions = np.stack([get_ee_coords(robot, x)
+                         for x in waypoints])
+        distance = np.sum(np.linalg.norm(np.diff(ee_positions,
+                                                 axis=0), axis=1))
+    else:
+        distance = np.sum(np.linalg.norm(np.diff(waypoints, axis=0), axis=1))
     duration = distance / speed
     dts = constant_timing(waypoints, robot, duration)
     for i in range(waypoints.shape[0]):

@@ -23,6 +23,7 @@ cf = CostFunction(
     normalize=True)
 custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
 
+plot_dict = {'plots': None}
 
 to_label = []
 session_vars = {
@@ -32,7 +33,9 @@ session_vars = {
     'tq': utils.TrainingQueue(maxsize=2000),
     'joint_vel_coeff': 1.,
     'speed': 0.5,
-    'plots': None
+    'use_ee_dist': False,
+    'rotate_data': False,
+    'loss_history': []
 }
 
 
@@ -81,15 +84,15 @@ def play_traj():
 
 @app.route('/plot')
 def handle_plot():
-    if session_vars['plots'] is None:
+    if plot_dict['plots'] is None:
         p1 = utils.plot_waypoints(display_env, display_robot1, to_label[0][0])
         p2 = utils.plot_waypoints(display_env, display_robot2, to_label[0][2])
-        session_vars['plots'] = (p1, p2)
+        plot_dict['plots'] = (p1, p2)
     else:
-        p1, p2 = session_vars['plots']
+        p1, p2 = plot_dict['plots']
         p1.Close()
         p2.Close()
-        session_vars['plots'] = None
+        plot_dict['plots'] = None
     return ''
 
 
@@ -107,8 +110,18 @@ def handle_submission():
         label = 1
     xA, _, xB, _ = to_label.pop(0)
     if label is not None:
-        data = (xA, xB, label)
-        session_vars['tq'].add(data)
+        if session_vars['rotate_data']:
+            offset = np.random.uniform(0, np.pi/4)
+            for i in range(8):
+                xA_rot = xA.copy()
+                xB_rot = xB.copy()
+                xA_rot[:,0] += i * (np.pi / 4) + offset
+                xA_rot[:,0] += i * (np.pi / 4) + offset
+                data = (xA_rot, xB_rot, label)
+                session_vars['tq'].add(data)
+        else:
+            data = (xA, xB, label)
+            session_vars['tq'].add(data)
     if len(to_label):
         starting_dofs = to_label[0][1].GetWaypoint(0)[:7]
         display_robot1.SetActiveDOFValues(starting_dofs)
@@ -147,13 +160,15 @@ def generate_trajs():
                         display_robot1,
                         xA,
                         session_vars['speed'],
-                        None)
+                        None,
+                        use_ee_dist=session_vars['use_ee_dist'])
                     trajB = utils.waypoints_to_traj(
                         display_env,
                         display_robot2,
                         xB,
                         session_vars['speed'],
-                        None)
+                        None,
+                        use_ee_dist=session_vars['use_ee_dist'])
                     temp_to_label.append((xA, trajA, xB, trajB))
     random.shuffle(temp_to_label)
     to_label.extend(temp_to_label)
@@ -166,7 +181,8 @@ def generate_trajs():
 @app.route('/train', methods=['POST'])
 def handle_train():
     num_epochs = int(request.form['num_epochs'])
-    utils.train(cf, session_vars['tq'], epochs=20)
+    session_vars['loss_history'].append(
+        utils.train(cf, session_vars['tq'], epochs=num_epochs))
     cf.save_model('./saves/experiments/' + session_vars['session_name'] + '/',
                   step=session_vars['cost_train_num'])
     session_vars['cost_train_num'] += 1
@@ -211,11 +227,13 @@ def handle_test():
             env,
             robot, goal)
         traj = utils.waypoints_to_traj(display_env, display_robot1,
-                                       result.GetTraj(), session_vars['speed'], None)
+                                       result.GetTraj(), session_vars['speed'], None,
+                                       use_ee_dist=session_vars['use_ee_dist'])
         default_traj = utils.waypoints_to_traj(display_env,
                                                display_robot2,
                                                default_result.GetTraj(),
-                                               0.5, None)
+                                               0.5, None,
+                                               use_ee_dist=session_vars['use_ee_dist'])
     display_robot1.GetController().SetPath(traj)
     display_robot2.GetController().SetPath(default_traj)
 
@@ -231,4 +249,7 @@ def handle_set_joint_vel_coeff():
     joint_vel_coeff = float(request.form['joint_vel'])
     session_vars['speed'] = float(request.form['speed'])
     session_vars['joint_vel_coeff'] = joint_vel_coeff
+    session_vars['use_ee_dist'] = (request.form['timing_dist'] == 'ee')
+    session_vars['rotate_data'] = (request.form['rotate'] == 'yes')
     return redirect(url_for('index'))
+

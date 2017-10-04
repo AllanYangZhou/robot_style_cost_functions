@@ -55,9 +55,23 @@
       <input type="submit" value="Test">
     </form>
     <form action="/set_params" method="post">
-      Change joint velocity regularization:<br>
-      <input type="text" name="joint_vel" value="{{ session_vars['joint_vel_coeff'] }}">
-      <input type="text" name="speed" value="{{ session_vars['speed'] }}">
+      Change joint velocity regularization:
+      <input type="text" name="joint_vel" value="{{ session_vars['joint_vel_coeff'] }}"><br>
+      Speed <input type="text" name="speed" value="{{ session_vars['speed'] }}"><br>
+      How to compute duration:<br>
+      <input type="radio"
+	     name="timing_dist"
+	     value="c-space"
+	     {{'checked' if not session_vars['use_ee_dist']}}> C-space dist<br>
+      <input type="radio" name="timing_dist" value="ee"
+	     {{'checked' if session_vars['use_ee_dist']}}> EE dist<br>
+      Automatically rotate data:<br>
+      <input type="radio"
+	     name="rotate"
+	     value="yes"
+	     {{'checked' if session_vars['rotate_data']}}> Yes<br>
+      <input type="radio" name="rotate" value="no"
+	     {{'checked' if not session_vars['rotate_data']}}> No<br>
       <input type="submit" value="Set">
     </form>
     {% endif %}
