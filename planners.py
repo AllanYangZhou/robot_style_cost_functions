@@ -23,6 +23,11 @@ def feature_height(robot, x):
     return np.square(robot.arm.hand.GetTransform()[2,3] - .222)
 
 
+def feature_height2(robot, x):
+    robot.SetActiveDOFValues(x)
+    return robot.arm.hand.GetTransform()[2,3]
+
+
 def feature_extent(robot, x):
     print('SHOULD NOT BE CALLED.')
     robot.SetActiveDOFValues(x)

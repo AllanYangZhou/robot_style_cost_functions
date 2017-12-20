@@ -42,6 +42,16 @@ class MLP:
         return self.model(x)
 
 
+class Linear:
+    def __init__(self, input_dim, activation=None):
+        self.model = Sequential()
+        self.model.add(Dense(input_dim, input_dim=input_dim))
+
+
+    def __call__(self, x):
+        return self.model(x)
+
+
 class CostFunction:
     def __init__(self,
                  robot,
@@ -72,7 +82,7 @@ class CostFunction:
 
         batch_size = tf.shape(trajA)[0]
         input_dim = 2*int(trajA.shape[-1]) + 1
-        self.mlp =  MLP(input_dim, activation=activation)
+        self.mlp =  Linear(input_dim, activation=activation)
         self.mlp_outA, self.mlp_outB = [], []
         for i in range(num_wps):
             prev_idx = max(i-1, 0)
