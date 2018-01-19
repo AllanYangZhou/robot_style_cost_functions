@@ -23,18 +23,6 @@ def feature_height(robot, x):
     return np.square(robot.arm.hand.GetTransform()[2,3] - .222)
 
 
-def feature_height2(robot, x):
-    robot.SetActiveDOFValues(x)
-    return robot.arm.hand.GetTransform()[2,3]
-
-
-def feature_extent(robot, x):
-    print('SHOULD NOT BE CALLED.')
-    robot.SetActiveDOFValues(x)
-    return np.linalg.norm(robot.arm.hand.GetTransform()[:2,3] -
-                          robot.GetTransform()[:2,3])
-
-
 def feature_orientation(robot, x):
     robot.SetActiveDOFValues(x)
     ee_dir = -1 * robot.GetJoints()[6].GetAxis()
@@ -135,52 +123,6 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn
     return results
 
 
-def trajopt_plan_to_config(env, robot, goal_config,
-                           num_steps=10, w=[0, 0],
-                           waypoints=[], duration=15,
-                           retimer=None):
-    def cost_height(x):
-        return w[0] * feature_height(robot, x)
-    def cost_orientation(x):
-        return w[1] * feature_orientation(robot, x)
-    custom_costs = {
-        'height': cost_height,
-        'orientation': cost_orientation
-    }
-    start_joints = robot.GetActiveDOFValues()
-    inits = []
-    inits.append(mu.linspace2d(start_joints, goal_config, num_steps))
-    waypoint_step = (num_steps - 1) // 2
-    for waypoint in waypoints:
-        inits.append(interpolate_waypoint(start_joints, waypoint, goal_config, num_steps))
-    joint_target = goal_config.tolist()
-    traj = None
-    best_cost = np.inf
-    init_unchanged_alert = None
-    for i, init in enumerate(inits):
-        result = trajopt_simple_plan(
-            env,
-            robot,
-            goal_config,
-            num_steps=num_steps,
-            init=init,
-            custom_costs=custom_costs)
-        waypoints = result.GetTraj()
-        is_safe = traj_is_safe(
-            waypoints, robot)
-        total_cost = np.sum(zip(*result.GetCosts())[1])
-        if total_cost < best_cost:
-            traj = waypoints_to_traj(env, robot, waypoints, duration, retimer)
-            best_cost = total_cost
-            if np.allclose(waypoints, init):
-                init_unchanged_alert = 'Init {:d}: Result is same as init.'.format(i)
-            else:
-                init_unchanged_alert = None
-    if init_unchanged_alert:
-        print(init_unchanged_alert)
-    return traj
-
-
 def collision_cost_callback(request):
     request['costs'][1]['params']['coeffs'] = [100]
     request['costs'][1]['params']['continuous'] = False
@@ -241,7 +183,7 @@ def get_trajopt_cost(cf):
         x = x.reshape((10,7))
         f = world_space_featurizer(cf.robot, x)
         #f = np.concatenate([np.ones((10,1)), f], axis=1)
-        score = cf.cost_traj(f)
+        score = cf.get_traj_cost(f[None])
         return score
     return cf_cost
 

@@ -102,14 +102,13 @@ class CostFunction:
         self.grad_mlp_outA = tf.reshape(
             jacobian(self.mlp_outA[0], self.trajA_ph),
             [input_dim*num_wps, -1])
+
         # Probability proportional to e^{-cost}
         cost_logits = -1 * tf.stack([self.costA, self.costB], axis=1)
         self.loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=cost_logits, labels=self.label_ph))
         self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
-        self.cost_loss = tf.reduce_mean(tf.square(self.costA - self.cost_label_ph))
-        self.cost_train_op = tf.train.AdamOptimizer().minimize(self.cost_loss)
 
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver(var_list=tf.trainable_variables())
@@ -135,17 +134,11 @@ class CostFunction:
         return np.squeeze(grad)
 
 
-    def cost_traj(self, waypoints):
-        '''Returns cost for a single trajectory with shape (num_wps, 7).'''
-        cost = self.sess.run(self.costA, feed_dict={
-            self.trajA_ph: waypoints[None],
-            K.learning_phase(): False
-        })
-        return np.squeeze(cost)
-
-
-    def cost_traj_batch(self, trajs):
-        '''Returns cost for a batch of trajs with shape (num_trajs, num_wps, 7).'''
+    def get_traj_cost(self, trajs):
+        '''Returns cost for a batch of trajs.
+        In: (num_trajs, num_wps, 7)
+        Out: (num_trajs,)
+        '''
         cost = self.sess.run(self.costA, feed_dict={
             self.trajA_ph: trajs,
             K.learning_phase(): False
@@ -153,12 +146,13 @@ class CostFunction:
         return np.squeeze(cost)
 
 
-    def corrcoef(self, test_data, labels):
+    def get_corrcoef(self, test_data, labels):
         '''Correlation between model predictions and labels.'''
         return np.corrcoef(self.cost_traj_batch(test_data), labels)[0,1]
 
 
-    def train(self, trajsA, trajsB, labels):
+    def train_pref(self, trajsA, trajsB, labels):
+        '''Train from labeled preferences.'''
         loss, _ = self.sess.run([self.loss, self.train_op], feed_dict={
             self.trajA_ph: trajsA,
             self.trajB_ph: trajsB,
@@ -168,22 +162,9 @@ class CostFunction:
         return loss
 
 
-    def train_cost(self, trajs, cost_labels):
-        cost_loss, _ = self.sess.run([self.cost_loss, self.cost_train_op], feed_dict={
-            self.trajA_ph: trajs,
-            self.cost_label_ph: cost_labels,
-            K.learning_phase(): True
-        })
-        return cost_loss
-
-
-    def get_cost_loss(self, trajs, cost_labels):
-        cost_loss = self.sess.run(self.cost_loss, feed_dict={
-            self.trajA_ph: traj,
-            self.cost_label_ph: cost_labels,
-            K.learning_phase(): False
-        })
-        return cost_loss
+    def train_demo(self, trajsA, labels):
+        '''Train from demonstrations.'''
+        pass
 
 
     def save_model(self, path, step=None):

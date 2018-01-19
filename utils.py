@@ -386,7 +386,7 @@ def train(cf, tq, epochs=5):
     loss = []
     for i in range(epochs * len(tq)):
         xA, xB, label = tq.sample()
-        l = cf.train(xA[None], xB[None], [int(label)])
+        l = cf.train_pref(xA[None], xB[None], [int(label)])
         loss.append(l)
     return np.array(loss)
 
