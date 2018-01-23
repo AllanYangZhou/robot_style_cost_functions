@@ -45,7 +45,7 @@ class MLP:
 class Linear:
     def __init__(self, input_dim, activation=None):
         self.model = Sequential()
-        self.model.add(Dense(input_dim, input_dim=input_dim))
+        self.model.add(Dense(1, input_dim=input_dim, activation=None))
 
 
     def __call__(self, x):
@@ -59,7 +59,8 @@ class CostFunction:
                  num_wps=10,
                  num_dofs=7,
                  normalize=False,
-                 activation='tanh'):
+                 activation='tanh',
+                 linear=False):
         self.robot = robot
         self.env = robot.GetEnv()
         self.sess = tf.Session()
@@ -82,7 +83,10 @@ class CostFunction:
 
         batch_size = tf.shape(trajA)[0]
         input_dim = 2*int(trajA.shape[-1]) + 1
-        self.mlp =  Linear(input_dim, activation=activation)
+        if linear:
+            self.mlp = Linear(input_dim)
+        else:
+            self.mlp = MLP(input_dim, activation=activation)
         self.mlp_outA, self.mlp_outB = [], []
         for i in range(num_wps):
             prev_idx = max(i-1, 0)
@@ -95,8 +99,12 @@ class CostFunction:
             self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
         self.mlp_outA = tf.concat(self.mlp_outA, axis=1)
         self.mlp_outB = tf.concat(self.mlp_outB, axis=1)
-        self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
-        self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
+        if linear:
+            self.costA = tf.reduce_sum(self.mlp_outA, axis=1)
+            self.costB = tf.reduce_sum(self.mlp_outB, axis=1)
+        else:
+            self.costA = tf.reduce_sum(tf.square(self.mlp_outA), axis=1)
+            self.costB = tf.reduce_sum(tf.square(self.mlp_outB), axis=1)
 
         # WARNING: Only the Jacobian for the first trajectory in the batch.
         self.grad_mlp_outA = tf.reshape(
@@ -148,7 +156,7 @@ class CostFunction:
 
     def get_corrcoef(self, test_data, labels):
         '''Correlation between model predictions and labels.'''
-        return np.corrcoef(self.cost_traj_batch(test_data), labels)[0,1]
+        return np.corrcoef(self.get_traj_cost(test_data), labels)[0,1]
 
 
     def train_pref(self, trajsA, trajsB, labels):
