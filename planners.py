@@ -73,11 +73,10 @@ def trajopt_simple_plan(env, robot, goal_config,
     prob = trajoptpy.ConstructProblem(s, env)
     for cost_name in custom_costs:
         cost_fn = custom_costs[cost_name]
-        for t in range(num_steps):
-            prob.AddCost(
-                cost_fn,
-                [(t,j) for j in range(7)],
-                '{:s}{:d}'.format(cost_name, t))
+        prob.AddCost(
+            cost_fn,
+            [(t,j) for t in range(num_steps) for j in range(7)],
+            '{:s}{:d}'.format(cost_name, t))
     for cost_name in custom_traj_costs:
         cost_fn = custom_traj_costs[cost_name]
         if isinstance(cost_fn, tuple):

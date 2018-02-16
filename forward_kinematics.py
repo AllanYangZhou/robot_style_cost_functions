@@ -64,6 +64,10 @@ def forward_kinematics(configs, g0s, axes, anchors):
 
 
 def augment_traj(traj, g0s, axes, anchors):
+    '''Takes trajectory as sequence of waypoints and
+    returns a sequence of features: the world coordinates
+    of each link and the orientation of the end effector.
+    '''
     num_wps = int(traj.shape[1])
     num_dofs = int(traj.shape[2])
     reshaped = tf.reshape(traj, [-1, num_dofs])
