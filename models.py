@@ -1,5 +1,5 @@
 import tensorflow as tf
-from keras.layers import Dense, Dropout
+from keras.layers import Dense, Dropout, BatchNormalization
 from keras.models import Sequential
 from keras import initializers
 from keras import backend as K
@@ -27,17 +27,33 @@ def jacobian(y_flat, x):
 
 
 class MLP:
-    def __init__(self, input_dim, activation='tanh', output_dim=None):
+    def __init__(
+            self,
+            input_dim,
+            activation='tanh',
+            output_dim=None,
+            dropout=0.5,
+            batchnorm=False):
         if output_dim is None:
             output_dim = input_dim
 
         self.model = Sequential()
-        self.model.add(Dense(2*input_dim, input_dim=input_dim, activation=activation))
 
-        self.model.add(Dropout(0.5))
+        self.model.add(Dense(
+            2*input_dim,
+            input_dim=input_dim,
+            activation=activation))
+        if batchnorm:
+            self.model.add(BatchNormalization())
+        if dropout is not None:
+            self.model.add(Dropout(dropout))
+
         self.model.add(Dense(input_dim, activation=activation))
+        if batchnorm:
+            self.model.add(BatchNormalization())
+        if dropout is not None:
+            self.model.add(Dropout(dropout))
 
-        self.model.add(Dropout(0.5))
         self.model.add(Dense(output_dim))
 
 
@@ -67,7 +83,10 @@ class CostFunction:
                  num_dofs=7,
                  normalize=False,
                  activation='tanh',
-                 quadratic=False):
+                 quadratic=True,
+                 dropout=0.5,
+                 lr=.001,
+                 batchnorm=False):
         self.robot = robot
         self.env = robot.GetEnv()
         self.sess = tf.Session()
@@ -90,7 +109,12 @@ class CostFunction:
         batch_size = tf.shape(trajA)[0]
         input_dim = 2*int(trajA.shape[-1]) + 1
         output_dim = input_dim if quadratic else 1
-        self.mlp = MLP(input_dim, activation=activation, output_dim=output_dim)
+        self.mlp = MLP(
+            input_dim,
+            activation=activation,
+            output_dim=output_dim,
+            dropout=dropout,
+            batchnorm=batchnorm)
         self.mlp_outA, self.mlp_outB = [], []
         for i in range(num_wps):
             prev_idx = max(i-1, 0)

@@ -452,3 +452,11 @@ def smooth_perturb(var=.05):
     delta = np.zeros((10, 7))
     delta[1:-1] = delta_prime
     return delta
+
+
+def ee_traj_cost(x, robot):
+    x = x.reshape((10,7))
+    ee_positions = np.stack([get_ee_coords(robot, wp)
+                             for wp in x])
+    ee_cost = np.sum(np.square(np.diff(ee_positions, axis=0)))
+    return ee_cost
