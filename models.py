@@ -144,7 +144,7 @@ class CostFunction:
         self.loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=cost_logits, labels=self.label_ph))
-        self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
+        self.train_op = tf.train.AdamOptimizer(lr).minimize(self.loss)
 
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver(var_list=tf.trainable_variables())
@@ -196,104 +196,6 @@ class CostFunction:
             K.learning_phase(): True
         })
         return loss
-
-
-    def train_demo(self, trajsA, labels):
-        '''Train from demonstrations.'''
-        pass
-
-
-    def save_model(self, path, step=None):
-        if step:
-            self.saver.save(self.sess, path, global_step=step)
-        else:
-            self.saver.save(self.sess, path)
-
-
-    def load_model(self, path):
-        self.saver.restore(self.sess, path)
-
-
-class BasicCostFunction:
-    def __init__(self,
-                 load_path=None,
-                 num_wps=10,
-                 num_dofs=7):
-        self.sess = tf.Session()
-        self.wp_ph = tf.placeholder(tf.float32, shape=[None, num_dofs], name='wp_ph')
-        self.trajA_ph = tf.placeholder(tf.float32,
-                                       shape=[None, num_wps, num_dofs],
-                                       name='trajA_ph')
-        self.trajB_ph = tf.placeholder(tf.float32,
-                                       shape=[None, num_wps, num_dofs],
-                                       name='trajB_ph')
-        self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
-
-        self.mlp = Linear(num_dofs)
-        self.wp_cost = self.mlp(self.wp_ph)
-        self.mlp_outA, self.mlp_outB = [], []
-        for i in range(num_wps):
-            self.mlp_outA.append(self.mlp(self.trajA_ph[:,i,:]))
-            self.mlp_outB.append(self.mlp(self.trajB_ph[:,i,:]))
-        self.mlp_outA = tf.concat(self.mlp_outA, axis=1)
-        self.mlp_outB = tf.concat(self.mlp_outB, axis=1)
-        self.costA = tf.reduce_sum(self.mlp_outA, axis=1)
-        self.costB = tf.reduce_sum(self.mlp_outB, axis=1)
-
-        # Probability proportional to e^{-cost}
-        cost_logits = -1 * tf.stack([self.costA, self.costB], axis=1)
-        self.loss = tf.reduce_mean(
-            tf.nn.sparse_softmax_cross_entropy_with_logits(
-                logits=cost_logits, labels=self.label_ph))
-        self.train_op = tf.train.GradientDescentOptimizer(.05).minimize(self.loss)
-
-        init_op = tf.global_variables_initializer()
-        self.saver = tf.train.Saver(var_list=tf.trainable_variables())
-        self.sess.run(init_op)
-        if load_path:
-            self.load_model(load_path)
-        self.num_params = np.sum([np.prod(v.shape) for v in tf.trainable_variables()])
-
-
-    def get_waypoint_cost(self, waypoints):
-        mlp_out = self.sess.run(self.wp_cost, feed_dict={
-            self.wp_ph: waypoints,
-            K.learning_phase(): False
-        })
-        return np.squeeze(mlp_out)
-
-
-    def get_traj_cost(self, trajs):
-        '''Returns cost for a batch of trajs.
-        In: (num_trajs, num_wps, 7)
-        Out: (num_trajs,)
-        '''
-        cost = self.sess.run(self.costA, feed_dict={
-            self.trajA_ph: trajs,
-            K.learning_phase(): False
-        })
-        return np.squeeze(cost)
-
-
-    def get_corrcoef(self, test_data, labels):
-        '''Correlation between model predictions and labels.'''
-        return np.corrcoef(self.get_traj_cost(test_data), labels)[0,1]
-
-
-    def train_pref(self, trajsA, trajsB, labels):
-        '''Train from labeled preferences.'''
-        loss, _ = self.sess.run([self.loss, self.train_op], feed_dict={
-            self.trajA_ph: trajsA,
-            self.trajB_ph: trajsB,
-            self.label_ph: labels,
-            K.learning_phase(): True
-        })
-        return loss
-
-
-    def train_demo(self, trajsA, labels):
-        '''Train from demonstrations.'''
-        pass
 
 
     def save_model(self, path, step=None):

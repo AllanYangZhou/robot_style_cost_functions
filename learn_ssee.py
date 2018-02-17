@@ -61,7 +61,7 @@ def main(iterations,
     for i in range(iterations):
         print('[*] Iteration {:d}/{:d}'.format(i, iterations))
         # Training
-        for j in range(100):
+        for j in range(500):
             for idcs in constants.sg_pair_idcs[::2]:
                 tq = tqs[idcs]
                 (wpsA, cA), (wpsB, cB) = tq.sample(num=2)
@@ -77,8 +77,10 @@ def main(iterations,
             labels = [ee_traj_cost(x, robot) for x in random_inputs]
         corr = cf.get_corrcoef(random_inputs, labels)
         ex.log_scalar('test.correlation', float(corr))
+        ex.log_scalar('num-trajs', len(tq))
 
         # Generating training data
+        true_cost_list = [] # want to keep track of how good our true costs are
         for idcs in constants.sg_pair_idcs[::2]:
             with env:
                 robot.SetActiveDOFValues(constants.configs[idcs[0]])
@@ -86,10 +88,13 @@ def main(iterations,
                     env, robot, constants.configs[idcs[1]],
                     custom_traj_costs=custom_cost,
                     joint_vel_coeff=0).GetTraj()
-                delta = utils.smooth_perturb(.1)
-                wps_perturbed = wps + delta
                 true_cost = ee_traj_cost(wps, robot)
-                true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
-            tqs[idcs].add((wps, true_cost))
-            tqs[idcs].add((wps_perturbed, true_cost_perturbed))
+                tqs[idcs].add((wps, true_cost))
+                true_cost_list.append(true_cost)
+                for j in range(10):
+                    delta = utils.smooth_perturb(.1)
+                    wps_perturbed = wps + delta
+                    true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
+                    tqs[idcs].add((wps_perturbed, true_cost_perturbed))
+        ex.log_scalar('training.true_cost', float(np.mean(true_cost_list)))
     cf.save_model(save_path)
