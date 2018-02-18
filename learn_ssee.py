@@ -22,6 +22,8 @@ def cfg():
     save_path = './saves/learned_ssee0/'
     lr = .001
     batchnorm = False
+    q_length = 10000
+    use_quadratic_features = True
 
 
 @ex.automain
@@ -31,7 +33,9 @@ def main(iterations,
          dropout,
          save_path,
          lr,
-         batchnorm):
+         batchnorm,
+         q_length,
+         use_quadratic_features):
     env, robot = utils.setup(render=False)
     cf = CostFunction(
         robot,
@@ -39,20 +43,25 @@ def main(iterations,
         normalize=normalize,
         activation=activation,
         dropout=dropout, lr=lr,
-        batchnorm=batchnorm)
-    custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
+        batchnorm=batchnorm,
+        quadratic=use_quadratic_features)
+
+    if use_quadratic_features:
+        custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
+    else:
+        custom_cost = {'NN': planners.get_trajopt_cost(cf)}
 
     tqs = {}
-    for idcs in constants.sg_pair_idcs[::2]:
-        tqs[idcs] = utils.TrainingQueue(maxsize=1000)
+    for idcs in constants.sg_train_idcs:
+        tqs[idcs] = utils.TrainingQueue(maxsize=q_length)
 
-    for idcs in constants.sg_pair_idcs[::2]:
+    for idcs in constants.sg_train_idcs:
         with env:
             linear = mu.linspace2d(
                 constants.configs[idcs[0]],
                 constants.configs[idcs[1]],
                 10)
-            for i in range(10):
+            for i in range(50):
                 delta = utils.smooth_perturb(.1)
                 wps_perturbed = linear + delta
                 true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
@@ -62,10 +71,10 @@ def main(iterations,
         print('[*] Iteration {:d}/{:d}'.format(i, iterations))
         # Training
         for j in range(500):
-            for idcs in constants.sg_pair_idcs[::2]:
+            for idcs in constants.sg_train_idcs:
                 tq = tqs[idcs]
                 (wpsA, cA), (wpsB, cB) = tq.sample(num=2)
-                if np.abs(cA - cB) < 0.01:
+                if np.allclose(cA, cB):
                     continue
                 offset = np.random.uniform(0, 2*np.pi)
                 wpsA[:,0] = offset
@@ -81,13 +90,19 @@ def main(iterations,
 
         # Generating training data
         true_cost_list = [] # want to keep track of how good our true costs are
-        for idcs in constants.sg_pair_idcs[::2]:
+        for idcs in constants.sg_train_idcs:
             with env:
                 robot.SetActiveDOFValues(constants.configs[idcs[0]])
-                wps = planners.trajopt_simple_plan(
-                    env, robot, constants.configs[idcs[1]],
-                    custom_traj_costs=custom_cost,
-                    joint_vel_coeff=0).GetTraj()
+                if use_quadratic_features:
+                    wps = planners.trajopt_simple_plan(
+                        env, robot, constants.configs[idcs[1]],
+                        custom_traj_costs=custom_cost,
+                        joint_vel_coeff=0).GetTraj()
+                else:
+                    wps = planners.trajopt_simple_plan(
+                        env, robot, constants.configs[idcs[1]],
+                        custom_costs=custom_cost,
+                        joint_vel_coeff=0).GetTraj()
                 true_cost = ee_traj_cost(wps, robot)
                 tqs[idcs].add((wps, true_cost))
                 true_cost_list.append(true_cost)
