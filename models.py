@@ -30,6 +30,7 @@ class MLP:
     def __init__(
             self,
             input_dim,
+            h_size=64,
             activation='tanh',
             output_dim=None,
             dropout=0.5,
@@ -40,7 +41,7 @@ class MLP:
         self.model = Sequential()
 
         self.model.add(Dense(
-            2*input_dim,
+            h_size,
             input_dim=input_dim,
             activation=activation))
         if batchnorm:
@@ -48,7 +49,7 @@ class MLP:
         if dropout is not None:
             self.model.add(Dropout(dropout))
 
-        self.model.add(Dense(input_dim, activation=activation))
+        self.model.add(Dense(h_size, activation=activation))
         if batchnorm:
             self.model.add(BatchNormalization())
         if dropout is not None:
@@ -61,31 +62,28 @@ class MLP:
         return self.model(x)
 
 
-class Linear:
-    def __init__(self, input_dim):
-        '''
-        self.W = tf.Variable(np.zeros(input_dim))
-        '''
-        self.model = Sequential()
-        self.model.add(Dense(1, input_dim=input_dim, use_bias=False))
-
-
-    def __call__(self, x):
-        '''return self.W * x'''
-        return self.model(x)
-
-
 class CostFunction:
     def __init__(self,
                  robot,
                  load_path=None,
                  num_wps=10,
                  num_dofs=7,
+                 # Normalize input values to [-1,1]
                  normalize=False,
-                 activation='tanh',
+                 # Whether to provide MLP (x_t, x_t - x_{t-1}) or (x_t, x_{t-1})
+                 provide_vel=True,
+                 # Whether to provide MLP the C-space values
+                 include_configs=False,
+                 # Whether to provide MLP all links or just eff
+                 use_all_links=True,
+                 # Whether to make cf of form ||y||_2^2
                  quadratic=True,
-                 dropout=0.5,
+                 # Preference based update learning rate
                  lr=.001,
+                 # Number of hidden units
+                 h_size=64,
+                 activation='relu',
+                 dropout=0.5,
                  batchnorm=False):
         self.robot = robot
         self.env = robot.GetEnv()
@@ -99,11 +97,25 @@ class CostFunction:
         g0s, axes, anchors = forward_kinematics.openrave_get_fk_params(robot)
         trajA = forward_kinematics.augment_traj(self.trajA_ph, g0s, axes, anchors)
         trajB = forward_kinematics.augment_traj(self.trajB_ph, g0s, axes, anchors)
+
         if normalize:
             tf_world_feature_min = tf.constant(c.world_feature_min)
             tf_world_frange = tf.constant(c.world_frange)
             trajA = (2 * (trajA - tf_world_feature_min) / (tf_world_frange)) - 1.
             trajB = (2 * (trajB - tf_world_feature_min) / (tf_world_frange)) - 1.
+
+        if not use_all_links:
+            # Only use end effector feature
+            trajA = trajA[:,:,15:18]
+            trajB = trajB[:,:,15:18]
+
+        if include_configs:
+            # Include the original configs
+            normalized_trajA = (2 * self.trajA_ph)/(2*np.pi)
+            normalized_trajB = (2 * self.trajB_ph)/(2*np.pi)
+            trajA = tf.concat([trajA, normalized_trajA], axis=2)
+            trajB = tf.concat([trajB, normalized_trajB], axis=2)
+
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
 
         batch_size = tf.shape(trajA)[0]
@@ -111,17 +123,19 @@ class CostFunction:
         output_dim = input_dim if quadratic else 1
         self.mlp = MLP(
             input_dim,
+            h_size=h_size,
             activation=activation,
             output_dim=output_dim,
             dropout=dropout,
             batchnorm=batchnorm)
         self.mlp_outA, self.mlp_outB = [], []
         for i in range(num_wps):
-            prev_idx = max(i-1, 0)
             currA_state = trajA[:,i,:]
-            velA = trajA[:,prev_idx,:] - currA_state
+            prevA_state = trajA[:,max(i-1,0),:]
+            velA = (prevA_state - currA_state) if provide_vel else prevA_state
             currB_state = trajB[:,i,:]
-            velB = trajB[:,prev_idx,:] - currB_state
+            prevB_state = trajB[:,max(i-1,0),:]
+            velB = (prevB_state - currB_state) if provide_vel else prevB_state
             wp_num = tf.fill([batch_size, 1], float(i))
             self.mlp_outA.append(self.mlp(tf.concat([currA_state, velA, wp_num], axis=1)))
             self.mlp_outB.append(self.mlp(tf.concat([currB_state, velB, wp_num], axis=1)))
