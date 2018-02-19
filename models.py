@@ -69,7 +69,7 @@ class CostFunction:
                  num_wps=10,
                  num_dofs=7,
                  # Normalize input values to [-1,1]
-                 normalize=False,
+                 normalize=True,
                  # Whether to provide MLP (x_t, x_t - x_{t-1}) or (x_t, x_{t-1})
                  provide_vel=True,
                  # Whether to provide MLP the C-space values
@@ -84,10 +84,11 @@ class CostFunction:
                  h_size=64,
                  activation='relu',
                  dropout=0.5,
-                 batchnorm=False):
+                 batchnorm=False,
+                 sess=None):
         self.robot = robot
         self.env = robot.GetEnv()
-        self.sess = tf.Session()
+        self.sess = sess or tf.Session()
         self.trajA_ph = tf.placeholder(tf.float32,
                                        shape=[None, num_wps, num_dofs],
                                        name='trajA_ph')
@@ -119,7 +120,7 @@ class CostFunction:
         self.label_ph = tf.placeholder(tf.int32, shape=[None], name='label_ph')
 
         batch_size = tf.shape(trajA)[0]
-        input_dim = 2*int(trajA.shape[-1]) + 1
+        input_dim = 2*int(trajA.shape[-1]) + 1 # (x_t, x_{t-1}, t)
         output_dim = input_dim if quadratic else 1
         self.mlp = MLP(
             input_dim,
