@@ -80,7 +80,8 @@ def main(iterations,
     for idcs in constants.sg_train_idcs:
         tqs[idcs] = utils.TrainingQueue(maxsize=q_length)
 
-    BEST_COST_SYNTH = 0.16174609467527284 # The avg cost of train trajs generated using the true cost fxn.
+    # The avg cost of train trajs generated using the true cost fxn.
+    BEST_COST_SYNTH = 0.13875292480745718
 
     for idcs in constants.sg_train_idcs:
         with env:
@@ -144,7 +145,7 @@ def main(iterations,
                     for wps_perturbed in make_perturbs(x, 10, perturb_amount):
                         true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
                         tqs[idcs].add((wps_perturbed, true_cost_perturbed))
-        ex.log_scalar('training.true_cost_ratio', float(np.mean(true_cost_list) / BEST_COST_SYNTH))
+        ex.log_scalar('training.true_cost', float(np.mean(true_cost_list)))
         if random_inits:
             ex.log_scalar('training.true_cost_var', float(np.var(true_cost_variances)))
     save_path = './saves/learned_ssee/'
