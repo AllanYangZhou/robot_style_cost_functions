@@ -10,7 +10,8 @@ from utils import (
     normalize_vec,
     get_pos_ik_soln,
     world_space_featurizer,
-    random_init_maker
+    random_init_maker,
+    smooth_perturb
 )
 import trajoptpy
 import trajoptpy.math_utils as mu
@@ -107,7 +108,8 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn
         **args)
     results.append(default_res)
     for i in range(num_inits - 1):
-        modified_init = random_init_maker(linear_init, one_wp=True)
+        #modified_init = random_init_maker(linear_init, one_wp=True)
+        modified_init = np.mod(linear_init + smooth_perturb(.1), 2*np.pi)
         res = trajopt_simple_plan(
             env,
             robot,

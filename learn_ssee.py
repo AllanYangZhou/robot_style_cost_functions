@@ -28,6 +28,16 @@ def cfg():
     include_configs = False
     use_all_links = True
     h_size = 64
+    random_inits = False
+
+
+def make_perturbs(x, num, perturb_amount):
+    perturbed_trajs = []
+    for j in range(num):
+        delta = utils.smooth_perturb(
+            np.random.uniform(.01, 1) if perturb_amount == 'rand' else perturb_amount)
+        perturbed_trajs.append(x+delta)
+    return perturbed_trajs
 
 
 @ex.automain
@@ -43,7 +53,8 @@ def main(iterations,
          provide_vel,
          include_configs,
          use_all_links,
-         h_size):
+         h_size,
+         random_inits):
     env, robot = utils.setup(render=False)
     cf = CostFunction(
         robot,
@@ -77,10 +88,7 @@ def main(iterations,
                 constants.configs[idcs[0]],
                 constants.configs[idcs[1]],
                 10)
-            for i in range(50):
-                delta = utils.smooth_perturb(
-                    np.random.uniform(.01, 1) if perturb_amount == 'rand' else perturb_amount)
-                wps_perturbed = linear + delta
+            for wps_perturbed in make_perturbs(linear, 50, perturb_amount):
                 true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
                 tqs[idcs].add((wps_perturbed, true_cost_perturbed))
 
@@ -106,29 +114,39 @@ def main(iterations,
 
         # Generating training data
         true_cost_list = [] # want to keep track of how good our true costs are
+        true_cost_variances = [] # Only applies if random_init = True
         for idcs in constants.sg_train_idcs:
             with env:
                 robot.SetActiveDOFValues(constants.configs[idcs[0]])
-                if use_quadratic_features:
-                    wps = planners.trajopt_simple_plan(
-                        env, robot, constants.configs[idcs[1]],
-                        custom_traj_costs=custom_cost,
-                        joint_vel_coeff=0).GetTraj()
+                if random_inits:
+                    results_list = planners.trajopt_multi_plan(
+                        env, robot, constants.configs[idcs[1]], num_inits=10,
+                        custom_traj_costs=(custom_cost if use_quadratic_features else {}),
+                        custom_costs=({} if use_quadratic_features else custom_cost),
+                        joint_vel_coeff=0)
+                    true_costs = []
+                    for res in results_list:
+                        wps = res.GetTraj()
+                        true_cost = ee_traj_cost(wps, robot)
+                        tqs[idcs].add((wps, true_cost))
+                        true_costs.append(true_cost)
+                    true_cost_list.append(np.min(true_costs))
+                    true_cost_variances.append(np.var(true_costs))
                 else:
                     wps = planners.trajopt_simple_plan(
                         env, robot, constants.configs[idcs[1]],
-                        custom_costs=custom_cost,
+                        custom_traj_costs=(custom_cost if use_quadratic_features else {}),
+                        custom_costs=({} if use_quadratic_features else custom_cost),
                         joint_vel_coeff=0).GetTraj()
-                true_cost = ee_traj_cost(wps, robot)
-                tqs[idcs].add((wps, true_cost))
-                true_cost_list.append(true_cost)
-                for j in range(10):
-                    delta = utils.smooth_perturb(
-                        np.random.uniform(.01, 1) if perturb_amount == 'rand' else perturb_amount)
-                    wps_perturbed = wps + delta
-                    true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
-                    tqs[idcs].add((wps_perturbed, true_cost_perturbed))
+                    true_cost = ee_traj_cost(wps, robot)
+                    tqs[idcs].add((wps, true_cost))
+                    true_cost_list.append(true_cost)
+                    for wps_perturbed in make_perturbs(x, 10, perturb_amount):
+                        true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
+                        tqs[idcs].add((wps_perturbed, true_cost_perturbed))
         ex.log_scalar('training.true_cost_ratio', float(np.mean(true_cost_list) / BEST_COST_SYNTH))
+        if random_inits:
+            ex.log_scalar('training.true_cost_var', float(np.var(true_cost_variances)))
     save_path = './saves/learned_ssee/'
     cf.save_model(save_path)
     ex.add_artifact(save_path + 'checkpoint')
