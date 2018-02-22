@@ -6,12 +6,14 @@ import constants
 import argparse
 import numpy as np
 import trajoptpy.math_utils as mu
+import tensorflow as tf
+import os
 
 from sacred import Experiment
-from sacred.observers import MongoObserver
+from sacred.observers import FileStorageObserver
 
 ex = Experiment('learn_sum_squared_end_eff_disp')
-ex.observers.append(MongoObserver.create())
+ex.observers.append(FileStorageObserver.create('exp_runs'))
 
 @ex.config
 def cfg():
@@ -54,7 +56,9 @@ def main(iterations,
          include_configs,
          use_all_links,
          h_size,
-         random_inits):
+         random_inits,
+         _seed):
+    tf.set_random_seed(_seed) # Set tf's seed to exp seed
     env, robot = utils.setup(render=False)
     cf = CostFunction(
         robot,
@@ -148,6 +152,7 @@ def main(iterations,
         ex.log_scalar('training.true_cost', float(np.mean(true_cost_list)))
         if random_inits:
             ex.log_scalar('training.true_cost_var', float(np.var(true_cost_variances)))
-    save_path = './saves/learned_ssee/'
-    cf.save_model(save_path)
-    ex.add_artifact(save_path + 'checkpoint')
+    save_folder = './saves/learned_ssee/'
+    cf.save_model(os.path.join(save_folder, 'model'))
+    for fname in os.listdir(save_folder):
+        ex.add_artifact(os.path.join(save_folder, fname))
