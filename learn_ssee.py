@@ -2,6 +2,7 @@ from models import CostFunction
 import planners
 import utils
 from utils import ee_traj_cost
+from tf_utils import add_simple_summary
 import constants
 import argparse
 import numpy as np
@@ -10,10 +11,12 @@ import tensorflow as tf
 import os
 
 from sacred import Experiment
-from sacred.observers import FileStorageObserver
+from sacred.observers import MongoObserver
+from sacred.stflow import LogFileWriter
 
-ex = Experiment('learn_sum_squared_end_eff_disp')
-ex.observers.append(FileStorageObserver.create('exp_runs'))
+ex_name = 'learn_sum_squared_end_eff_disp'
+ex = Experiment(ex_name)
+ex.observers.append(MongoObserver.create())
 
 @ex.config
 def cfg():
@@ -43,6 +46,7 @@ def make_perturbs(x, num, perturb_amount):
 
 
 @ex.automain
+@LogFileWriter(ex) # Records location of logs
 def main(iterations,
          activation,
          normalize,
@@ -57,7 +61,7 @@ def main(iterations,
          use_all_links,
          h_size,
          random_inits,
-         _seed):
+         _seed, _run):
     tf.set_random_seed(_seed) # Set tf's seed to exp seed
     env, robot = utils.setup(render=False)
     cf = CostFunction(
@@ -74,6 +78,8 @@ def main(iterations,
         h_size=h_size)
     ex.info['num_params'] = cf.num_params
     ex.info['mlp_input_shape'] = cf.mlp.model.input_shape
+
+    summary_writer = tf.summary.FileWriter(os.path.join('tb_logs', ex_name, str(_run._id)))
 
     if use_quadratic_features:
         custom_cost = {'NN': planners.get_trajopt_error_cost(cf)}
@@ -115,7 +121,8 @@ def main(iterations,
         with env:
             labels = [ee_traj_cost(x, robot) for x in random_inputs]
         corr = cf.get_corrcoef(random_inputs, labels)
-        ex.log_scalar('test.correlation', float(corr))
+        add_simple_summary(summary_writer, 'test.correlation', corr, i)
+        summary_writer.flush()
 
         # Generating training data
         true_cost_list = [] # want to keep track of how good our true costs are
@@ -149,9 +156,13 @@ def main(iterations,
                     for wps_perturbed in make_perturbs(x, 10, perturb_amount):
                         true_cost_perturbed = ee_traj_cost(wps_perturbed, robot)
                         tqs[idcs].add((wps_perturbed, true_cost_perturbed))
-        ex.log_scalar('training.true_cost', float(np.mean(true_cost_list)))
+        add_simple_summary(summary_writer, 'training.true_cost', np.mean(true_cost_list), i)
         if random_inits:
-            ex.log_scalar('training.true_cost_var', float(np.var(true_cost_variances)))
+            add_simple_summary(
+                summary_writer,
+                'training.true_cost_var',
+                np.var(true_cost_variances, i))
+        summary_writer.flush() # flush summary writer at end of iteration
     save_folder = './saves/learned_ssee/'
     cf.save_model(os.path.join(save_folder, 'model'))
     for fname in os.listdir(save_folder):
