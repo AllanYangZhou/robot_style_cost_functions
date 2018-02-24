@@ -11,8 +11,7 @@ import constants
 
 
 def get_geometry():
-    '''Should return the position and size of the openrave viewer.
-    Position part doesn't really work right now.'''
+    '''Should return the position and size of the openrave viewer.'''
     display = Xlib.display.Display()
     root = display.screen().root
     # List of all window ids
@@ -22,23 +21,31 @@ def get_geometry():
     # Finding the openrave window by window name
     for wid in wids:
         window = display.create_resource_object('window', wid)
+        # NOTE: if any of the windows have non-ascii chars in the
+        # name, e.g. certain web page titles, then this will crash.
         name = window.get_wm_name()
         if 'OpenRAVE' in name:
             or_window = window
     # Need the parent: https://stackoverflow.com/a/12854004
     parent = or_window.query_tree().parent
-    geom = parent.get_geometry()
+    geom = window.get_geometry()
     x, y = geom.x, geom.y
+    translated_data = window.translate_coords(root, x, y)
+    x = -1 * translated_data.x
+    y = -1 * translated_data.y
     width, height = geom.width, geom.height
-    return (x, y, width, height)
+    return {'top': y, 'left': x, 'width': width, 'height': height}
 
 
-def record(robot, traj, out_name, fps=60):
+def record(robot, traj, out_name, fps=60, monitor=None):
+    current_config = robot.GetActiveDOFValues()
+    env = robot.GetEnv()
     total_duration = traj.GetDuration() # in seconds
     num_frames = fps * (int(total_duration) + 1)
 
     sct = mss()
-    monitor = {'top': 25, 'left': 64, 'width': 640, 'height': 480}
+    if monitor is None:
+        monitor = {'top': 25, 'left': 64, 'width': 640, 'height': 480}
     frames = []
     for i in range(num_frames):
         waypoint = traj.Sample((float(i) * total_duration) / num_frames)
@@ -47,14 +54,17 @@ def record(robot, traj, out_name, fps=60):
         sct_img = sct.grab(monitor)
         img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
         frames.append(np.array(img))
+    with env:
+        robot.SetActiveDOFValues(current_config)
     clip = ImageSequenceClip(frames, fps=fps)
     clip.write_videofile(out_name, bitrate='1000k')
 
 
 if __name__ == '__main__':
     env, robot = utils.setup()
+    monitor = get_geometry()
     with env:
         wps = planners.trajopt_simple_plan(
             env, robot, constants.configs[1]).GetTraj()
     traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-    record(robot, traj, 'test_video.webm')
+    record(robot, traj, 'test_video.webm', monitor=monitor)
