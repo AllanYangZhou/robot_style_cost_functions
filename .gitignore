@@ -7,3 +7,5 @@ saves/
 exp_trajs/
 .vscode/
 tb_logs/
+*.webm
+*.mp4

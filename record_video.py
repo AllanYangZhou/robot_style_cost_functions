@@ -37,8 +37,6 @@ def record(robot, traj, out_name, fps=60):
     total_duration = traj.GetDuration() # in seconds
     num_frames = fps * (int(total_duration) + 1)
 
-    print('Total dur', total_duration)
-
     sct = mss()
     monitor = {'top': 25, 'left': 64, 'width': 640, 'height': 480}
     frames = []
@@ -50,7 +48,7 @@ def record(robot, traj, out_name, fps=60):
         img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
         frames.append(np.array(img))
     clip = ImageSequenceClip(frames, fps=fps)
-    clip.write_videofile(out_name, codec='mpeg4', bitrate='1000k')
+    clip.write_videofile(out_name, bitrate='1000k')
 
 
 if __name__ == '__main__':
@@ -59,4 +57,4 @@ if __name__ == '__main__':
         wps = planners.trajopt_simple_plan(
             env, robot, constants.configs[1]).GetTraj()
     traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-    record(robot, traj, 'test_video.mp4')
+    record(robot, traj, 'test_video.webm')
