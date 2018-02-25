@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>Compare Trajectories</title>
+        <style>
+            .video-box {
+                display: inline-block;
+                width: 49%;
+                text-align: center;
+            }
+            .video {
+                margin-bottom: 20px;
+            }
+        </style>
+    </head>
+    <body>
+        <div style="width:100%;">
+            <div class="video-box">
+                <h2>Left trajectory</h2>
+                <video controls class="video">
+                    <source src="vids/{{pathA}}" type="video/webm" />
+                </video>
+                <form action="/submit" method="post">
+                    <input type="hidden" name="label" value="A">
+                    <input type="hidden" name="cid" value="{{cid}}">
+                    <input type="submit" value="Left better">
+                </form>
+            </div>
+            <div class="video-box">
+                <h2>Right trajectory</h2>
+                <video controls class="video">
+                    <source src="vids/{{pathB}}" type="video/webm" />
+                </video>
+                <form action="/submit" method="post">
+                    <input type="hidden" name="label" value="B">
+                    <input type="hidden" name="cid" value="{{cid}}">
+                    <input type="submit" value="Right better">
+                </form>
+            </div>
+        </div>
+
+        <div style="width: 100%; text-align: center;">
+            <form action="/submit" method="post">
+                <input type="hidden" name="label" value="Neither">
+                <input type="hidden" name="cid" value="{{cid}}">
+                <input type="submit" value="Can't Decide">
+            </form>
+        </div>
+        <br>
+        <hr>
+        Debug info:<br>
+        <p>There are <strong>{{num_unlabeled}}</strong> unlabeled comparisons in the queue right now.</p>
+        <p>Comparison object id: {{cid}}</p>
+        <p>Video paths: {{pathA}}, {{pathB}}</p>
+    </body>
+</html>

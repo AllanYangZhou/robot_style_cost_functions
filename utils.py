@@ -314,7 +314,7 @@ def num_diff(f, x, eps=1e-5):
 
 
 class TrainingQueue:
-    def __init__(self, maxsize=200):
+    def __init__(self, maxsize=None):
         self.q = []
         self.maxsize = maxsize
 
@@ -330,13 +330,17 @@ class TrainingQueue:
 
     def add(self, elem):
         self.q.append(elem)
-        if len(self.q) > self.maxsize:
+        if self.maxsize and len(self.q) > self.maxsize:
             self.q.pop(0)
 
 
     def extend(self, arr):
         for elem in arr:
             self.add(elem)
+
+
+    def pop(self, idx=0):
+        return self.q.pop(idx)
 
 
     def __len__(self):

@@ -140,35 +140,23 @@ configs.append(np.array([ 6.67831053, 2.34454636, 6.11349135,
 configs.append(np.array([ 5.50656379, 3.1144873 , 0.55779987,
                           0.61593953, 2.91502521, 4.06068503, 3.88592378]))
 
-sg_pair_idcs = [
-    (0,1),
-    (1,0),
-    (2,3),
-    (3,2)
-]
-
 
 sg_train_idcs = [
     (0,1),
     (2,3),
-    (6,8),
-    (7,8),
-    (9,4),
-    (11,7)
 ]
 
 
 sg_test_idcs = [
     (6,8),
-    (8,6),
     (7,8),
-    (8,7),
     (9,4),
     (11,7)
 ]
 
+
 start_goal_pairs = []
-for i, j in sg_pair_idcs:
+for i, j in sg_train_idcs:
     start_goal_pairs.append((configs[i], configs[j]))
 
 
