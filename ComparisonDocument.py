@@ -2,6 +2,18 @@ from mongoengine import (
     Document, StringField, IntField,
     BinaryField
 )
+from bson.binary import Binary
+import pickle
+
+
+def array_to_binary(x):
+    '''Numpy array to bson binary'''
+    return Binary(pickle.dumps(x))
+
+
+def binary_to_array(b):
+    '''Bson binary to numpy array'''
+    return pickle.loads(b.decode())
 
 
 class Comparison(Document):

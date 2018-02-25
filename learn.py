@@ -3,18 +3,19 @@ import Queue
 import os
 import shutil
 import time
-import pickle
 
 import numpy as np
 import trajoptpy.math_utils as mu
 from mongoengine import connect
-from bson.binary import Binary
 
 import utils
 import planners
 import constants
 import record_video
-from ComparisonDocument import Comparison
+from ComparisonDocument import (
+    Comparison,
+    array_to_binary,
+    binary_to_array)
 
 
 KILL_TASK = 'kill'
@@ -31,16 +32,6 @@ def make_perturbs(x, num, perturb_amount):
         delta = utils.smooth_perturb(perturb_amount)
         perturbed_trajs.append(x+delta)
     return perturbed_trajs
-
-
-def array_to_binary(x):
-    '''Numpy array to bson binary'''
-    return Binary(pickle.dumps(x))
-
-
-def binary_to_array(b):
-    '''Bson binary to numpy array'''
-    return pickle.loads(b.decode())
 
 
 def generate_trajs_and_train(task_queue, traj_queue, labeled_comps_queue):
@@ -93,30 +84,33 @@ def generate_trajs_and_train(task_queue, traj_queue, labeled_comps_queue):
 
     # Actual main loop of this subprocess
     while True:
+        try:
+            next_task = task_queue.get(block=False)
+            if next_task == KILL_TASK:
+                print('Child process terminating.')
+                break
+        except Queue.Empty:
+            pass
         for s_idx, g_idx in constants.sg_train_idcs:
-            try:
-                next_task = task_queue.get(block=False)
-                if next_task == KILL_TASK:
-                    print('Child process terminating.')
-                    break
-            except Queue.Empty:
-                q_s = constants.configs[s_idx]
-                q_g = constants.configs[g_idx]
+            # Check if we've received a command
+            q_s = constants.configs[s_idx]
+            q_g = constants.configs[g_idx]
+            with env:
+                robot.SetActiveDOFValues(q_s)
+                wps = planners.trajopt_simple_plan(
+                    env, robot, q_g,
+                    custom_costs=custom_cost,
+                    joint_vel_coeff=1).GetTraj()
+                perturbed_wps = make_perturbs(wps, 5, .1)
+            for wps in perturbed_wps:
+                out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.webm'.format(
+                    s_idx, g_idx, traj_counter)
                 with env:
-                    robot.SetActiveDOFValues(q_s)
-                    wps = planners.trajopt_simple_plan(
-                        env, robot, q_g,
-                        custom_costs=custom_cost,
-                        joint_vel_coeff=1).GetTraj()
-                    perturbed_wps = make_perturbs(wps, 5, .1)
-                for wps in perturbed_wps:
-                    out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.webm'.format(
-                        s_idx, g_idx, traj_counter)
-                    with env:
-                        traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-                    record_video.record(robot, traj, out_path, monitor=monitor)
-                    traj_queue.put((wps, out_path, idcs))
-                    traj_counter += 1
+                    traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
+                record_video.record(robot, traj, out_path, monitor=monitor)
+                traj_queue.put((wps, out_path, idcs))
+                traj_counter += 1
+        time.sleep(.1)
 
 
 def main():
