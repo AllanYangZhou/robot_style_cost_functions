@@ -21,8 +21,6 @@ from ComparisonDocument import (
 
 
 KILL_TASK = 'kill'
-TRAIN_TASK = 'train'
-START_TASK = 'start'
 
 num_perturbs = 5
 label_batchsize = 30
@@ -46,6 +44,7 @@ def comms_proc(task_queue, traj_queue):
     traj_tqs = {idcs: utils.TrainingQueue(maxsize=20) for idcs in constants.sg_train_idcs}
 
     pretrain_trajs_generated = False
+    pairs_tracker = set()
     while True:
         try:
             next_task = task_queue.get(block=False)
@@ -58,8 +57,8 @@ def comms_proc(task_queue, traj_queue):
         try:
             # Clear out traj_queue
             while True:
-                wps, path, idcs = traj_queue.get(block=False)
-                traj_tqs[idcs].add((wps, path))
+                wps, path, idcs, counter= traj_queue.get(block=False)
+                traj_tqs[idcs].add((wps, path, counter))
         except Queue.Empty:
             pass
 
@@ -80,8 +79,10 @@ def comms_proc(task_queue, traj_queue):
                 idx = np.random.choice(len(constants.sg_train_idcs))
                 idcs = constants.sg_train_idcs[idx]
                 traj_tq = traj_tqs[idcs]
-                (wpsA, pathA), (wpsB, pathB) = traj_tq.sample(num=2)
-                if not np.allclose(wpsA, wpsB):
+                (wpsA, pathA, counterA), (wpsB, pathB, counterB) = traj_tq.sample(num=2)
+                pair_id = (min(counterA, counterB), max(counterA, counterB))
+                if not np.allclose(wpsA, wpsB) and pair_id not in pairs_tracker:
+                    pairs_tracker.add(pair_id)
                     c = Comparison(
                         wpsA=array_to_binary(wpsA),
                         wpsB=array_to_binary(wpsB),
@@ -126,9 +127,13 @@ def main():
             continue
 
         # Training step
+        print('Training time')
         qsize = len(labeled_comparison_queue)
         for _ in range(qsize):
-            wpsA, wpsB, label = labeled_comparison_queue.sample()
+            comp = labeled_comparison_queue.sample()
+            wpsA = binary_to_array(comp.wpsA)
+            wpsB = binary_to_array(comp.wpsB)
+            label = comp.label
             cf.train_pref(wpsA[None], wpsB[None], [label])
 
         # Generation step
@@ -155,7 +160,7 @@ def main():
                     traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
                 # TODO: move the video export to a different process
                 record_video.record(robot, traj, out_path, monitor=monitor)
-                traj_queue.put((wps, out_path, idcs))
+                traj_queue.put((wps, out_path, idcs, traj_counter))
                 traj_counter += 1
         time.sleep(.1)
 

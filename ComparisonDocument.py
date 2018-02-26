@@ -4,6 +4,7 @@ from mongoengine import (
 )
 from bson.binary import Binary
 import pickle
+import numpy as np
 
 
 def array_to_binary(x):
