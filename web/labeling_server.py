@@ -6,6 +6,7 @@ from flask import (
 from mongoengine import connect
 from ComparisonDocument import Comparison
 import os
+import numpy as np
 app = Flask(__name__)
 
 connect('style_experiment')
@@ -26,14 +27,16 @@ def choose_exp():
 @app.route('/compare')
 def compare():
     unlabeled = Comparison.objects(exp_name=session['exp_name'], label=None)
-    if unlabeled.count():
-        c = unlabeled[0]
+    count = unlabeled.count()
+    if count:
+        idx = np.random.choice(count)
+        c = unlabeled[idx]
         context = {
             'exp_name': session['exp_name'],
             'pathA': os.path.basename(c.pathA),
             'pathB': os.path.basename(c.pathB),
             'cid': c.id,
-            'num_unlabeled': len(unlabeled)
+            'num_unlabeled': count
         }
         return render_template(
             'compare.html', **context)

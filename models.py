@@ -41,7 +41,7 @@ class MLP:
         self.model = Sequential()
 
         self.model.add(Dense(
-            h_size,
+            h_size if h_size else 2*input_dim,
             input_dim=input_dim,
             activation=activation))
         if batchnorm:
@@ -49,7 +49,9 @@ class MLP:
         if dropout is not None:
             self.model.add(Dropout(dropout))
 
-        self.model.add(Dense(h_size, activation=activation))
+        self.model.add(Dense(
+            h_size if h_size else input_dim,
+            activation=activation))
         if batchnorm:
             self.model.add(BatchNormalization())
         if dropout is not None:

@@ -62,7 +62,7 @@ class LinearCostFunction:
         self.loss = tf.reduce_mean(
             tf.nn.sparse_softmax_cross_entropy_with_logits(
                 logits=cost_logits, labels=self.label_ph))
-        self.train_op = tf.train.GradientDescentOptimizer(.05).minimize(self.loss)
+        self.train_op = tf.train.AdamOptimizer().minimize(self.loss)
 
         init_op = tf.global_variables_initializer()
         self.saver = tf.train.Saver(var_list=tf.trainable_variables())

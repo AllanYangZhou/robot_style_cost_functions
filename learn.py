@@ -43,16 +43,19 @@ def comms_proc(exp_name, task_queue, traj_queue):
 
     traj_tqs = {idcs: utils.TrainingQueue(maxsize=20) for idcs in constants.sg_train_idcs}
     pairs_tracker = set()
+    added_trajs = 0
     while True:
         try:
             # Clear out traj_queue
             while True:
                 wps, path, idcs, counter= traj_queue.get(block=False)
                 traj_tqs[idcs].add((wps, path, counter))
+                added_trajs += 1
         except Queue.Empty:
             pass
 
-        if len(Comparison.objects(exp_name=exp_name, label=None)) < label_batchsize:
+        if len(Comparison.objects(exp_name=exp_name, label=None)) < label_batchsize and\
+           added_trajs >= 10 * len(constants.sg_train_idcs):
             idx = np.random.choice(len(constants.sg_train_idcs))
             idcs = constants.sg_train_idcs[idx]
             traj_tq = traj_tqs[idcs]
