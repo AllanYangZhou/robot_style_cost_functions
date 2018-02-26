@@ -12,6 +12,7 @@ from mongoengine import connect
 import tensorflow as tf
 
 from models import CostFunction
+from linear_models import LinearCostFunction
 import utils
 import planners
 import constants
@@ -24,14 +25,11 @@ from ComparisonDocument import (
 from tf_utils import add_simple_summary
 
 
-KILL_TASK = 'kill'
-
-num_perturbs = 10
 label_batchsize = 30
 
 
 def make_perturbs(x, num, perturb_amount):
-    perturbed_trajs = [x]
+    perturbed_trajs = []
     for j in range(num):
         delta = utils.smooth_perturb(perturb_amount)
         perturbed_trajs.append(x+delta)
@@ -43,61 +41,47 @@ def comms_proc(exp_name, task_queue, traj_queue):
 
     connect('style_experiment') # mongodb connection
 
-    traj_tqs = {idcs: utils.TrainingQueue(maxsize=15) for idcs in constants.sg_train_idcs}
-    new_trajs = 0
-    # pairs_tracker = set()
+    traj_tqs = {idcs: utils.TrainingQueue(maxsize=20) for idcs in constants.sg_train_idcs}
+    pairs_tracker = set()
     while True:
-        try:
-            next_task = task_queue.get(block=False)
-            if next_task == KILL_TASK:
-                print('Child process terminating.')
-                break
-        except Queue.Empty:
-            pass
-
         try:
             # Clear out traj_queue
             while True:
                 wps, path, idcs, counter= traj_queue.get(block=False)
                 traj_tqs[idcs].add((wps, path, counter))
-                new_trajs += 1
         except Queue.Empty:
             pass
 
-        if len(Comparison.objects(exp_name=exp_name, label=None)) == 0 and\
-           new_trajs >= (len(constants.sg_train_idcs) * (num_perturbs + 1)):
-            new_trajs = 0
-            # only incremented if a comparison was successfully added.
-            successes_count = 0
-            for _ in range(100):
-                if successes_count >= label_batchsize:
-                    break
-                idx = np.random.choice(len(constants.sg_train_idcs))
-                idcs = constants.sg_train_idcs[idx]
-                traj_tq = traj_tqs[idcs]
-                (wpsA, pathA, counterA), (wpsB, pathB, counterB) = traj_tq.sample(num=2)
-                pair_id = (min(counterA, counterB), max(counterA, counterB))
-                if not np.allclose(wpsA, wpsB): # and pair_id not in pairs_tracker:
-                    # pairs_tracker.add(pair_id)
-                    c = Comparison(
-                        exp_name=exp_name,
-                        wpsA=array_to_binary(wpsA),
-                        wpsB=array_to_binary(wpsB),
-                        pathA=pathA, pathB=pathB)
-                    c.save()
-                    successes_count += 1
+        if len(Comparison.objects(exp_name=exp_name, label=None)) < label_batchsize:
+            idx = np.random.choice(len(constants.sg_train_idcs))
+            idcs = constants.sg_train_idcs[idx]
+            traj_tq = traj_tqs[idcs]
+            if len(traj_tq) < 10:
+                continue
+            (wpsA, pathA, counterA), (wpsB, pathB, counterB) = traj_tq.sample(num=2)
+            pair_id = (min(counterA, counterB), max(counterA, counterB))
+            if not np.allclose(wpsA, wpsB) and pair_id not in pairs_tracker:
+                pairs_tracker.add(pair_id)
+                c = Comparison(
+                    exp_name=exp_name,
+                    wpsA=array_to_binary(wpsA),
+                    wpsB=array_to_binary(wpsB),
+                    pathA=pathA, pathB=pathB)
+                c.save()
         time.sleep(.1)
 
 
-def main(exp_name):
+def main(args):
+    exp_name = args.exp_name
+
+    traj_counter = 0
     # Directory setup
     vid_dir = os.path.join('web', 'vids', exp_name)
     if os.path.exists(vid_dir):
         print('Video directory already exists!')
-        return
-    os.makedirs(vid_dir)
-
-    client = connect('style_experiment')
+        traj_counter = len(os.listdir(vid_dir))
+    else:
+        os.makedirs(vid_dir)
 
     # Queue to send child process commands.
     task_queue = multiprocessing.Queue()
@@ -109,29 +93,37 @@ def main(exp_name):
     )
     p.start()
 
+    client = connect('style_experiment')
+
+    planned_wps = {idcs: None for idcs in constants.sg_train_idcs}
     # Training queue of *labeled* comparisons
     labeled_comparison_queue = ComparisonQueue(exp_name)
 
     env, robot = utils.setup(render=True)
     raw_input('Press enter to continue...')
     monitor = record_video.get_geometry()
-    cf = CostFunction(
-        robot,
-        use_all_links=False,
-        quadratic=False)
+    # cf = CostFunction(
+    #     robot,
+    #     use_all_links=True,
+    #     quadratic=False)
+    cf = LinearCostFunction(robot, num_dofs=50)
+    cf_save_path = os.path.join('saves', 'style_experiment', exp_name, 'model')
     custom_cost = {'NN': planners.get_trajopt_cost(cf)}
     summary_writer = tf.summary.FileWriter(os.path.join('tb_logs', 'style_experiment', exp_name))
 
     # Actual main loop
-    traj_counter = 0
     global_step = 0
+    prev_num_labeled = 0
+    num_perturbs = 0
     while True:
-        sufficient_labeled_data = len(labeled_comparison_queue) >= label_batchsize
+        num_labeled = len(labeled_comparison_queue)
+        sufficient_labeled_data = num_labeled >= label_batchsize
 
         # Training step
-        if sufficient_labeled_data:
-            qsize = len(labeled_comparison_queue)
-            for _ in range(qsize):
+        if num_labeled - prev_num_labeled > label_batchsize and num_perturbs > 5:
+            prev_num_labeled = num_labeled
+            num_perturbs = 0
+            for _ in range(num_labeled):
                 comp = labeled_comparison_queue.sample()
                 wpsA = binary_to_array(comp.wpsA)
                 wpsB = binary_to_array(comp.wpsB)
@@ -154,12 +146,16 @@ def main(exp_name):
             t_acc = np.mean(labels == pred)
             add_simple_summary(summary_writer, 'training.accuracy', t_acc, global_step)
             summary_writer.flush()
+            cf.save_model(cf_save_path, step=global_step)
             global_step += 1
+            for idcs in planned_wps:
+                planned_wps[idcs] = None
 
         # Generation step
-        if sufficient_labeled_data or traj_counter == 0:
-            for idcs in constants.sg_train_idcs:
-                s_idx, g_idx = idcs
+        for idcs in constants.sg_train_idcs:
+            s_idx, g_idx = idcs
+            wps = planned_wps[idcs]
+            if wps is None:
                 q_s = constants.configs[s_idx]
                 q_g = constants.configs[g_idx]
                 with env:
@@ -172,27 +168,27 @@ def main(exp_name):
                     else:
                         # Generate pretraining data
                         wps = mu.linspace2d(q_s, q_g, 10)
-                    perturbed_wps = make_perturbs(wps, 10, .1)
-                for wps in perturbed_wps:
-                    vid_name = 's{:d}-g{:d}_traj{:d}.mp4'.format(
-                        s_idx, g_idx, traj_counter)
-                    out_path = os.path.join(vid_dir, vid_name)
-                    with env:
-                        traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-                    # TODO: move the video export to a different process
-                    record_video.record(robot, traj, out_path, monitor=monitor)
-                    traj_queue.put((wps, out_path, idcs, traj_counter))
-                    traj_counter += 1
+                planned_wps[idcs] = wps
+            else:
+                wps = make_perturbs(wps, 1, .1)[0]
+                num_perturbs += 1
+            vid_name = 's{:d}-g{:d}_traj{:d}.mp4'.format(
+                s_idx, g_idx, traj_counter)
+            out_path = os.path.join(vid_dir, vid_name)
+            with env:
+                traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
+            # TODO: move the video export to a different process
+            if not args.no_record:
+                record_video.record(robot, traj, out_path, monitor=monitor)
+            traj_queue.put((wps, out_path, idcs, traj_counter))
+            traj_counter += 1
         time.sleep(.1)
-
-    # Tell the child process to end, then join.
-    task_queue.put(KILL_TASK)
-    p.join()
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('exp_name', type=str)
+    parser.add_argument('--no_record', action='store_true')
     args = parser.parse_args()
 
-    main(args.exp_name)
+    main(args)
