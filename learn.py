@@ -4,6 +4,7 @@ import os
 import shutil
 import time
 import psutil
+import argparse
 
 import numpy as np
 import trajoptpy.math_utils as mu
@@ -37,11 +38,8 @@ def make_perturbs(x, num, perturb_amount):
     return perturbed_trajs
 
 
-def comms_proc(task_queue, traj_queue):
+def comms_proc(exp_name, task_queue, traj_queue):
     proc = psutil.Process(os.getpid())
-    # Directory setup
-    shutil.rmtree('web/vids/')
-    os.mkdir('web/vids/')
 
     connect('style_experiment') # mongodb connection
 
@@ -66,7 +64,8 @@ def comms_proc(task_queue, traj_queue):
         except Queue.Empty:
             pass
 
-        if len(Comparison.objects(label=None)) == 0 and new_trajs >= (len(constants.sg_train_idcs) * (num_perturbs + 1)):
+        if len(Comparison.objects(exp_name=exp_name, label=None)) == 0 and\
+           new_trajs >= (len(constants.sg_train_idcs) * (num_perturbs + 1)):
             new_trajs = 0
             # only incremented if a comparison was successfully added.
             successes_count = 0
@@ -81,6 +80,7 @@ def comms_proc(task_queue, traj_queue):
                 if not np.allclose(wpsA, wpsB): # and pair_id not in pairs_tracker:
                     # pairs_tracker.add(pair_id)
                     c = Comparison(
+                        exp_name=exp_name,
                         wpsA=array_to_binary(wpsA),
                         wpsB=array_to_binary(wpsB),
                         pathA=pathA, pathB=pathB)
@@ -89,15 +89,15 @@ def comms_proc(task_queue, traj_queue):
         time.sleep(.1)
 
 
-def main():
+def main(exp_name):
+    # Directory setup
+    vid_dir = os.path.join('web', 'vids', exp_name)
+    if os.path.exists(vid_dir):
+        print('Video directory already exists!')
+        return
+    os.makedirs(vid_dir)
+
     client = connect('style_experiment')
-    if 'style_experiment' in client.database_names():
-        resp = raw_input('DB exists already. Clear?')
-        if resp == 'y':
-            client.drop_database('style_experiment')
-        else:
-            print('OK, exiting.')
-            return
 
     # Queue to send child process commands.
     task_queue = multiprocessing.Queue()
@@ -105,12 +105,12 @@ def main():
     traj_queue = multiprocessing.Queue()
     p = multiprocessing.Process(
         target=comms_proc,
-        args=[task_queue, traj_queue]
+        args=[exp_name, task_queue, traj_queue]
     )
     p.start()
 
     # Training queue of *labeled* comparisons
-    labeled_comparison_queue = ComparisonQueue()
+    labeled_comparison_queue = ComparisonQueue(exp_name)
 
     env, robot = utils.setup(render=True)
     raw_input('Press enter to continue...')
@@ -120,7 +120,7 @@ def main():
         use_all_links=False,
         quadratic=False)
     custom_cost = {'NN': planners.get_trajopt_cost(cf)}
-    summary_writer = tf.summary.FileWriter(os.path.join('tb_logs', 'style_experiment'))
+    summary_writer = tf.summary.FileWriter(os.path.join('tb_logs', 'style_experiment', exp_name))
 
     # Actual main loop
     traj_counter = 0
@@ -174,8 +174,9 @@ def main():
                         wps = mu.linspace2d(q_s, q_g, 10)
                     perturbed_wps = make_perturbs(wps, 10, .1)
                 for wps in perturbed_wps:
-                    out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.mp4'.format(
+                    vid_name = 's{:d}-g{:d}_traj{:d}.mp4'.format(
                         s_idx, g_idx, traj_counter)
+                    out_path = os.path.join(vid_dir, vid_name)
                     with env:
                         traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
                     # TODO: move the video export to a different process
@@ -190,4 +191,8 @@ def main():
 
 
 if __name__ == '__main__':
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument('exp_name', type=str)
+    args = parser.parse_args()
+
+    main(args.exp_name)

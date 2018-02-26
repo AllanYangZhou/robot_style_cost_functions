@@ -18,6 +18,7 @@ def binary_to_array(b):
 
 
 class Comparison(Document):
+    exp_name = StringField(required=True)
     wpsA = BinaryField(required=True)
     wpsB = BinaryField(required=True)
     # paths to the videos for each
@@ -28,13 +29,14 @@ class Comparison(Document):
 
 
 class ComparisonQueue:
-    def __init__(self, allowed_labels=[0,1]):
+    def __init__(self, exp_name, allowed_labels=[0,1]):
+        self.exp_name = exp_name
         self.allowed_labels = allowed_labels
 
 
     @property
     def queue(self):
-        return Comparison.objects(label__in=self.allowed_labels)
+        return Comparison.objects(exp_name=self.exp_name, label__in=self.allowed_labels)
 
 
     def sample(self, num=1):

@@ -1,0 +1,16 @@
+<html>
+    <head><title>Choose experiment</title></head>
+    <body>
+        <form action="/choose_exp" method="post">
+            Experiment name:
+            <input type="text" name="exp_name">
+            <input type="submit" value="Select">
+        </form>
+        Available experiments:
+        <ul>
+            {% for exp_name in exp_name_list %}
+            <li>{{exp_name}}</li>
+            {% endfor %}
+        </ul>
+    </body>
+</html>

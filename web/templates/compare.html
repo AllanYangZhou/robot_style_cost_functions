@@ -22,12 +22,13 @@
     </head>
     <body>
         <div style="width:100%; text-align: center;">
+            <h1>Experiment: {{exp_name}}</h1>
             <button onclick="playAllVideos()">Play Both</button>
         </div>
         <div style="width:100%;">
             <div class="video-box">
                 <video controls class="video">
-                    <source src="vids/{{pathA}}" type="video/mp4" />
+                    <source src="vids/{{exp_name}}/{{pathA}}" type="video/mp4" />
                 </video>
                 <form action="/submit" method="post">
                     <input type="hidden" name="label" value="A">
@@ -37,7 +38,7 @@
             </div>
             <div class="video-box">
                 <video controls class="video">
-                    <source src="vids/{{pathB}}" type="video/mp4" />
+                    <source src="vids/{{exp_name}}/{{pathB}}" type="video/mp4" />
                 </video>
                 <form action="/submit" method="post">
                     <input type="hidden" name="label" value="B">

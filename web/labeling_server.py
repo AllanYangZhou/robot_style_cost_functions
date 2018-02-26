@@ -1,7 +1,7 @@
 from flask import (
     Flask, render_template,
     send_from_directory, request,
-    redirect, url_for
+    redirect, url_for, session
 )
 from mongoengine import connect
 from ComparisonDocument import Comparison
@@ -10,12 +10,26 @@ app = Flask(__name__)
 
 connect('style_experiment')
 
+
 @app.route('/')
 def index():
-    unlabeled = Comparison.objects(label=None)
-    if len(unlabeled):
+    exp_name_list = Comparison.objects.distinct('exp_name')
+    return render_template('index.html', exp_name_list=exp_name_list)
+
+
+@app.route('/choose_exp', methods=['POST'])
+def choose_exp():
+    session['exp_name'] = request.form['exp_name']
+    return redirect(url_for('compare'))
+
+
+@app.route('/compare')
+def compare():
+    unlabeled = Comparison.objects(exp_name=session['exp_name'], label=None)
+    if unlabeled.count():
         c = unlabeled[0]
         context = {
+            'exp_name': session['exp_name'],
             'pathA': os.path.basename(c.pathA),
             'pathB': os.path.basename(c.pathB),
             'cid': c.id,
@@ -46,4 +60,6 @@ def handle_submit():
     else:
         raise Exception('Unexpected label.')
     c.save()
-    return redirect(url_for('index'))
+    return redirect(url_for('compare'))
+
+app.secret_key = 'A0Zr98j/3yX R~XHH!jmN]LWX/,?RT'
