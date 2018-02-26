@@ -157,30 +157,31 @@ def main():
             global_step += 1
 
         # Generation step
-        for idcs in constants.sg_train_idcs:
-            s_idx, g_idx = idcs
-            q_s = constants.configs[s_idx]
-            q_g = constants.configs[g_idx]
-            with env:
-                robot.SetActiveDOFValues(q_s)
-                if sufficient_labeled_data:
-                    wps = planners.trajopt_simple_plan(
-                        env, robot, q_g,
-                        custom_costs=custom_cost,
-                        joint_vel_coeff=1).GetTraj()
-                else:
-                    # Generate pretraining data
-                    wps = mu.linspace2d(q_s, q_g, 10)
-                perturbed_wps = make_perturbs(wps, 10, .1)
-            for wps in perturbed_wps:
-                out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.mp4'.format(
-                    s_idx, g_idx, traj_counter)
+        if sufficient_labeled_data or traj_counter == 0:
+            for idcs in constants.sg_train_idcs:
+                s_idx, g_idx = idcs
+                q_s = constants.configs[s_idx]
+                q_g = constants.configs[g_idx]
                 with env:
-                    traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-                # TODO: move the video export to a different process
-                record_video.record(robot, traj, out_path, monitor=monitor)
-                traj_queue.put((wps, out_path, idcs, traj_counter))
-                traj_counter += 1
+                    robot.SetActiveDOFValues(q_s)
+                    if sufficient_labeled_data:
+                        wps = planners.trajopt_simple_plan(
+                            env, robot, q_g,
+                            custom_costs=custom_cost,
+                            joint_vel_coeff=1).GetTraj()
+                    else:
+                        # Generate pretraining data
+                        wps = mu.linspace2d(q_s, q_g, 10)
+                    perturbed_wps = make_perturbs(wps, 10, .1)
+                for wps in perturbed_wps:
+                    out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.mp4'.format(
+                        s_idx, g_idx, traj_counter)
+                    with env:
+                        traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
+                    # TODO: move the video export to a different process
+                    record_video.record(robot, traj, out_path, monitor=monitor)
+                    traj_queue.put((wps, out_path, idcs, traj_counter))
+                    traj_counter += 1
         time.sleep(.1)
 
     # Tell the child process to end, then join.

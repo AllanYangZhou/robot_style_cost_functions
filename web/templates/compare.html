@@ -12,11 +12,20 @@
                 margin-bottom: 20px;
             }
         </style>
+        <script>
+         function playAllVideos() {
+             videos = document.querySelectorAll('video');
+             videos[0].play();
+             videos[1].play();
+         }
+        </script>
     </head>
     <body>
+        <div style="width:100%; text-align: center;">
+            <button onclick="playAllVideos()">Play Both</button>
+        </div>
         <div style="width:100%;">
             <div class="video-box">
-                <h2>Left trajectory</h2>
                 <video controls class="video">
                     <source src="vids/{{pathA}}" type="video/mp4" />
                 </video>
@@ -27,7 +36,6 @@
                 </form>
             </div>
             <div class="video-box">
-                <h2>Right trajectory</h2>
                 <video controls class="video">
                     <source src="vids/{{pathB}}" type="video/mp4" />
                 </video>
