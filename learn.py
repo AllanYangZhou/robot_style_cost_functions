@@ -173,12 +173,12 @@ def main():
                     wps = mu.linspace2d(q_s, q_g, 10)
                 perturbed_wps = make_perturbs(wps, 10, .1)
             for wps in perturbed_wps:
-                out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.webm'.format(
+                out_path = 'web/vids/s{:d}-g{:d}_traj{:d}.mp4'.format(
                     s_idx, g_idx, traj_counter)
                 with env:
                     traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
                 # TODO: move the video export to a different process
-                #record_video.record(robot, traj, out_path, monitor=monitor)
+                record_video.record(robot, traj, out_path, monitor=monitor)
                 traj_queue.put((wps, out_path, idcs, traj_counter))
                 traj_counter += 1
         time.sleep(.1)
