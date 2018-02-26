@@ -2,8 +2,8 @@ from mss import mss
 import Xlib
 import Xlib.display
 from PIL import Image
-from moviepy.editor import ImageSequenceClip
 import numpy as np
+import imageio
 
 import utils
 import planners
@@ -43,21 +43,20 @@ def record(robot, traj, out_name, fps=60, monitor=None):
     total_duration = traj.GetDuration() # in seconds
     num_frames = fps * (int(total_duration) + 1)
 
-    sct = mss()
-    if monitor is None:
-        monitor = {'top': 25, 'left': 64, 'width': 640, 'height': 480}
     frames = []
-    for i in range(num_frames):
-        waypoint = traj.Sample((float(i) * total_duration) / num_frames)
-        with env:
-            robot.SetActiveDOFValues(waypoint[:7])
-        sct_img = sct.grab(monitor)
-        img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
-        frames.append(np.array(img))
+    with mss() as sct:
+        if monitor is None:
+            monitor = {'top': 25, 'left': 64, 'width': 640, 'height': 480}
+        for i in range(num_frames):
+            waypoint = traj.Sample((float(i) * total_duration) / num_frames)
+            with env:
+                robot.SetActiveDOFValues(waypoint[:7])
+            sct_img = sct.grab(monitor)
+            img = Image.frombytes('RGB', sct_img.size, sct_img.rgb)
+            frames.append(np.array(img))
     with env:
         robot.SetActiveDOFValues(current_config)
-    clip = ImageSequenceClip(frames, fps=fps)
-    clip.write_videofile(out_name, bitrate='1000k')
+    imageio.mimsave(out_name, frames, fps=60)
 
 
 if __name__ == '__main__':
@@ -67,4 +66,4 @@ if __name__ == '__main__':
         wps = planners.trajopt_simple_plan(
             env, robot, constants.configs[1]).GetTraj()
     traj = utils.waypoints_to_traj(env, robot, wps, 1, None)
-    record(robot, traj, 'test_video.webm', monitor=monitor)
+    record(robot, traj, 'test_video.mp4', monitor=monitor)
