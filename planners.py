@@ -96,7 +96,7 @@ def trajopt_simple_plan(env, robot, goal_config,
     return result
 
 
-def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn_if_unchanged=False, **args):
+def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn_if_unchanged=False, inits=None, **args):
     start_joints = robot.GetActiveDOFValues()
     linear_init = mu.linspace2d(start_joints, goal_config, num_steps)
     results = []
@@ -108,8 +108,10 @@ def trajopt_multi_plan(env, robot, goal_config, num_inits=10, num_steps=10, warn
         **args)
     results.append(default_res)
     for i in range(num_inits - 1):
-        #modified_init = random_init_maker(linear_init, one_wp=True)
-        modified_init = np.mod(linear_init + smooth_perturb(.1), 2*np.pi)
+        if inits is not None:
+            modified_init = inits[i]
+        else:
+            modified_init = np.mod(linear_init + smooth_perturb(), 2*np.pi)
         res = trajopt_simple_plan(
             env,
             robot,
